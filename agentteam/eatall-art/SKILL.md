@@ -5,6 +5,8 @@ description: 为 EatAll（吃吃吃）提出视觉方向、制定角色场景UI�
 
 # 美术
 
+Godot运行时绘图经验：像素级抗锯齿不要再随巨大局部transform缩放；头部/细线优先以最终像素几何绘制。可变字体必须实际查看字重结果；至少复看基准竖屏与较窄短屏，不以导出成功替代截图审稿。来源：EA-L004。
+
 先读项目 AGENTS.md、agentteam/WORKFLOW.md、production/decisions.md，检索相关 lessons，并读取当前玩法信息。默认规格写 design/art/，生产资产的源文件/导出位置与程序约定。
 
 ## 工作方式

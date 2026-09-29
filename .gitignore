@@ -12,3 +12,11 @@ __pycache__/
 *.py[cod]
 node_modules/
 *.log
+
+# Godot imports and local build tooling
+.godot/
+.tools/
+dist/
+*.tmp
+*.keystore
+*.jks
