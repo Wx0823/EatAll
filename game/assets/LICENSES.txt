@@ -1,7 +1,10 @@
-EatAll v0.1 assets and dependencies
+EatAll v0.2 assets and dependencies
 
-The original EatAll character, terrain, UI and sound effects are drawn/generated
-at runtime by this project's code. They are not extracted from the reference video.
+The art-v2 backgrounds, character illustrations and sprites are AI-generated
+with the built-in ImageGen tool for this project, using its approved concept
+as reference. Prompts and provenance: design/art/production-v02.md.
+Continuous body geometry, UI skins and sound effects are generated at runtime
+by this project's code. No assets are extracted from the reference game video.
 AI-generated concept images in design/art/concepts are design references and are
 not bundled as runtime game assets.
 

@@ -5,6 +5,9 @@ const Board = preload("res://scripts/board_renderer.gd")
 const Stick = preload("res://scripts/virtual_stick.gd")
 const Progress = preload("res://scripts/progress.gd")
 const Sounds = preload("res://scripts/sfx.gd")
+const UiSkin = preload("res://scripts/ui_skin.gd")
+const MEADOW = preload("res://assets/art-v2/meadow.png")
+const HOME_MONSTER = preload("res://assets/art-v2/home-monster.png")
 const INK := Color("4d2543")
 const CORAL := Color("f87961")
 const CREAM := Color("fff3da")
@@ -114,10 +117,10 @@ func _button(parent: Node, text: String, action: Callable, fill: Color = CREAM, 
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.add_theme_stylebox_override("normal", _style(fill, INK, 17, true))
-	b.add_theme_stylebox_override("hover", _style(fill.lightened(0.06), INK, 17, true))
-	b.add_theme_stylebox_override("pressed", _style(fill.darkened(0.08), INK, 17))
-	b.add_theme_stylebox_override("disabled", _style(Color("e7e0d2"), Color("c9bcba"), 17))
+	b.add_theme_stylebox_override("normal", UiSkin.button(fill))
+	b.add_theme_stylebox_override("hover", UiSkin.button(fill.lightened(0.05)))
+	b.add_theme_stylebox_override("pressed", UiSkin.button(fill.darkened(0.07), true))
+	b.add_theme_stylebox_override("disabled", UiSkin.button(Color("e7e0d2"), false, true))
 	b.add_theme_color_override("font_color", INK)
 	b.add_theme_color_override("font_hover_color", INK)
 	b.add_theme_color_override("font_pressed_color", INK)
@@ -160,18 +163,28 @@ func _show_home() -> void:
 	mode = "home"
 	board = null
 	stick = null
-	var caption := _label(content, "小小点心 · 大大脑洞", 16, Color("87627a"), true)
+	var caption := _label(content, "P I C N I C   M O N S T E R", 13, INK, true)
 	caption.name = "Caption"
-	var title := _label(content, "吃吃吃", 57, INK, true)
+	var title := _label(content, "吃吃吃", 61, INK, true)
+	title.add_theme_color_override("font_outline_color", Color("fff1ce"))
+	title.add_theme_constant_override("outline_size", 8)
+	title.add_theme_color_override("font_shadow_color", Color(0.31,0.15,0.22,0.18))
+	title.add_theme_constant_override("shadow_offset_y", 5)
 	title.name = "Title"
-	var subtitle := _label(content, "EAT ALL", 25, Color("e8745e"), true)
+	var subtitle := _label(content, "EAT ALL", 26, Color("d96b4c"), true)
+	subtitle.add_theme_color_override("font_outline_color", Color("fff1ce"))
+	subtitle.add_theme_constant_override("outline_size", 5)
 	subtitle.name = "Subtitle"
-	var hero := Board.new()
+	var hero := TextureRect.new()
+	hero.texture = HOME_MONSTER
+	hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	hero.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.name = "Hero"
 	content.add_child(hero)
-	var mock := {"width": 7, "height": 5, "terrain": [Vector2i(1,4),Vector2i(2,4),Vector2i(3,4),Vector2i(4,4),Vector2i(5,4)], "hazards": [], "fruit": [Vector2i(5,1)], "body": [Vector2i(2,1),Vector2i(2,2),Vector2i(2,3),Vector2i(3,3),Vector2i(4,3),Vector2i(5,3)]}
-	hero.set_data(mock, {"body":mock.body, "fruit":mock.fruit, "status":"playing"})
-	var line := _label(content, "吃点心，长身体。\n用小聪明，走出每一关。", 20, INK, true)
+	var line := _label(content, "一口点心，一场小冒险。", 18, INK, true)
+	line.add_theme_color_override("font_outline_color", Color("fff3da"))
+	line.add_theme_constant_override("outline_size", 5)
 	line.name = "Tagline"
 	var start := _button(content, "开始野餐   →" if progress.completed.is_empty() else "继续野餐   →", start_level.bind(_next_level()), CORAL, 22)
 	start.name = "Start"
@@ -179,7 +192,9 @@ func _show_home() -> void:
 	select.name = "Select"
 	var settings := _button(content, "设置", _settings, MINT, 16)
 	settings.name = "Settings"
-	var foot := _label(content, "烘焙野餐  /  12 道小谜题", 13, Color("8b7980"), true)
+	var foot := _label(content, "烘焙野餐  ·  12 道小谜题", 13, INK, true)
+	foot.add_theme_color_override("font_outline_color", CREAM)
+	foot.add_theme_constant_override("outline_size", 4)
 	foot.name = "Footer"
 	_layout()
 
@@ -231,9 +246,9 @@ func start_level(index: int) -> void:
 	state = Rules.initial_state(levels[index])
 	history.clear()
 	fail_reason = ""
-	var tag := _label(content, "烘焙野餐    /    %02d" % (index + 1), 14, Color("95717e"))
+	var tag := _label(content, "烘焙野餐    /    %02d" % (index + 1), 12, Color("95717e"))
 	tag.name = "Tag"
-	var title := _label(content, levels[index].title, 28)
+	var title := _label(content, levels[index].title, 24)
 	title.name = "Title"
 	var pause := _button(content, "Ⅱ", pause_game, CREAM, 24)
 	pause.name = "Pause"
@@ -277,11 +292,11 @@ func _layout() -> void:
 			top = maxf(20.0, safe.position.y * h / screen.y + 12)
 			bottom = maxf(16.0, (screen.y - safe.end.y) * h / screen.y + 8)
 	if mode == "home":
-		_rect(content.get_node("Caption"), 20, top+5, w-40, 27)
-		_rect(content.get_node("Title"), 20, top+35, w-40, 86)
-		_rect(content.get_node("Subtitle"), 20, top+119, w-40, 39)
-		_rect(content.get_node("Hero"), 42, top+161, w-84, maxf(160, h-top-bottom-461))
-		_rect(content.get_node("Tagline"), 20, h-bottom-274, w-40, 70)
+		_rect(content.get_node("Caption"), 20, top+20, w-40, 27)
+		_rect(content.get_node("Title"), 20, top+56, w-40, 86)
+		_rect(content.get_node("Subtitle"), 20, top+136, w-40, 39)
+		_rect(content.get_node("Hero"), 18, top+184, w-36, maxf(168, h-top-bottom-434))
+		_rect(content.get_node("Tagline"), 20, h-bottom-248, w-40, 42)
 		_rect(content.get_node("Start"), 54, h-bottom-191, w-108, 62)
 		_rect(content.get_node("Select"), 54, h-bottom-113, (w-124)*0.65, 52)
 		_rect(content.get_node("Settings"), 70+(w-124)*0.65, h-bottom-113, (w-124)*0.35, 52)
@@ -296,21 +311,21 @@ func _layout() -> void:
 			_rect(content.get_node("Level%d" % i), 28 + (i%3)*(bw+16), top+132+(i/3)*(bh+18), bw, bh)
 		_rect(content.get_node("Footer"), 12, h-bottom-54, w-24, 40)
 	elif mode == "play" and is_instance_valid(board):
-		_rect(content.get_node("Tag"), 26, top, w-104, 24)
-		_rect(content.get_node("Title"), 26, top+29, w-111, 48)
-		_rect(content.get_node("Pause"), w-77, top+12, 52, 49)
-		_rect(counter, 27, top+93, w*0.60, 31)
-		_rect(step_label, w*0.68, top+93, w*0.25, 31)
-		_rect(board, 19, top+143, w-38, maxf(170, h-top-bottom-376))
-		_rect(hint_label, 26, h-bottom-226, w-52, 58)
-		var control_w := minf(180.0, (w-70.0)*0.5)
+		_rect(content.get_node("Tag"), 26, top, w-104, 18)
+		_rect(content.get_node("Title"), 26, top+19, w-111, 34)
+		_rect(content.get_node("Pause"), w-74, top+4, 48, 46)
+		_rect(counter, 27, top+60, w*0.64, 25)
+		_rect(step_label, w*0.71, top+60, w*0.20, 25)
+		_rect(board, 12, top+101, w-24, maxf(170, h-top-bottom-305))
+		_rect(hint_label, 26, h-bottom-193, w-52, 39)
+		var control_w := minf(160.0, (w-70.0)*0.5)
 		var action_w := minf(192.0, (w-70.0)*0.5)
 		var stick_x := 22.0 if not progress.left_handed else w-22-control_w
 		var actions_x := w-26-action_w if not progress.left_handed else 26.0
-		_rect(stick, stick_x, h-bottom-176, control_w, 160)
-		_rect(undo_button, actions_x, h-bottom-156, action_w, 58)
-		_rect(content.get_node("Restart"), actions_x, h-bottom-84, action_w, 48)
-		_rect(content.get_node("ControlTip"), stick_x-5, h-bottom-20, control_w+10, 23)
+		_rect(stick, stick_x, h-bottom-149, control_w, 134)
+		_rect(undo_button, actions_x, h-bottom-134, action_w, 52)
+		_rect(content.get_node("Restart"), actions_x, h-bottom-69, action_w, 43)
+		_rect(content.get_node("ControlTip"), stick_x-6, h-bottom-16, control_w+12, 23)
 	if overlay.get_child_count() > 0:
 		var panel: Control = overlay.get_node_or_null("Panel")
 		if panel:
@@ -321,7 +336,7 @@ func _update_hud() -> void:
 		return
 	var total: int = levels[level_index].fruit.size()
 	counter.text = "点心  %d / %d%s" % [total-state.fruit.size(), total, "  ·  出口已打开" if state.fruit.is_empty() else ""]
-	counter.add_theme_font_size_override("font_size", 16 if state.fruit.is_empty() else 19)
+	counter.add_theme_font_size_override("font_size", 14 if state.fruit.is_empty() else 16)
 	step_label.text = "%d 步" % state.moves
 	undo_button.disabled = history.is_empty()
 
@@ -557,12 +572,14 @@ func _notification(what: int) -> void:
 		get_tree().quit()
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color("f8f1df"))
-	draw_circle(Vector2(size.x*0.87, 150), 180, Color("e8eddc"))
-	draw_circle(Vector2(-25, size.y*0.52), 135, Color("e8eddc"))
-	draw_circle(Vector2(size.x+70, size.y+35), 225, Color("e1e8d0"))
-	draw_circle(Vector2(-70, size.y+30), 210, Color("f4ddc8"))
-	for i in 8:
-		var p := Vector2(22 + i*69, size.y-8-(i%3)*11)
-		draw_line(p, p-Vector2(4,21), Color("adc4a1"), 3, true)
-		draw_circle(p-Vector2(4,24), 6, Color("c2d2b0"))
+	var factor := maxf(size.x / MEADOW.get_width(), size.y / MEADOW.get_height())
+	var bg_size := MEADOW.get_size() * factor
+	draw_texture_rect(MEADOW, Rect2((size-bg_size)*0.5, bg_size), false)
+	if mode == "play" or mode == "select":
+		var header := _style(Color(1.0,0.957,0.843,0.94), Color("cfa47b"), 19, true)
+		draw_style_box(header, Rect2(15, 14, size.x-30, 103 if mode == "play" else 119))
+	if mode == "play":
+		var tray := _style(Color(1.0,0.951,0.834,0.94), Color("d4b390"), 29, true)
+		draw_style_box(tray, Rect2(9, size.y-180, size.x-18, 190))
+		var hint := _style(Color(1.0,0.97,0.86,0.88), Color.TRANSPARENT, 13)
+		draw_style_box(hint, Rect2(21, size.y-216, size.x-42, 42))

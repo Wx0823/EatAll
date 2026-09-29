@@ -68,17 +68,24 @@ func _input(event: InputEvent) -> void:
 func _draw() -> void:
 	var c := size * 0.5
 	var r := minf(size.x, size.y) * 0.43
-	draw_circle(c + Vector2(0, 5), r + 3, Color("d3b998"))
-	draw_circle(c, r, Color("f5e5c9"))
-	draw_arc(c, r, 0, TAU, 64, Color("b89682"), 2.5, true)
-	draw_arc(c, r - 6, PI, TAU, 36, Color("fff9e8"), 3, true)
+	for i in range(7,0,-1):
+		draw_circle(c+Vector2(0,4),r+i,Color(0.45,0.27,0.18,0.018),true,-1,true)
+	draw_circle(c, r, Color("c89f7c"),true,-1,true)
+	draw_circle(c-Vector2(0,1),r-2,Color("fff6dc"),true,-1,true)
+	draw_circle(c,r-5,Color("edceaa"),true,-1,true)
+	for i in range(24,0,-1):
+		var t := float(i)/24.0
+		draw_circle(c+Vector2(0,1), (r-7)*t, Color("fbecd1").lerp(Color("f3dfbd"),t*t),true,-1,true)
+	draw_arc(c, r - 6, PI, TAU, 48, Color("fff9e8"), 2, true)
 	for d in [Vector2i.UP, Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT]:
 		var v := Vector2(d)
 		var p := c + v * r * 0.76
 		var cross := Vector2(-v.y, v.x)
 		draw_colored_polygon(PackedVector2Array([p + v * 7, p - v * 5 + cross * 6, p - v * 5 - cross * 6]), INK if direction == d else Color("b99686"))
 	var k := c + knob * r
-	draw_circle(k + Vector2(0, 4), r * 0.32, Color("48283d"))
-	draw_circle(k, r * 0.32, Color("784864"))
-	draw_circle(k + Vector2(-3, -4), r * 0.25, Color("955c77"))
-	draw_arc(k, r * 0.32, 0, TAU, 36, INK, 2, true)
+	draw_circle(k + Vector2(0, 5), r * 0.34, Color(0.37,0.18,0.27,0.22),true,-1,true)
+	draw_circle(k, r * 0.34, INK,true,-1,true)
+	for i in range(24,0,-1):
+		var t := float(i)/24.0
+		draw_circle(k+Vector2(-1.5,-2)*(1-t),r*0.31*t,Color("a06887").lerp(Color("683c58"),t*t),true,-1,true)
+	draw_arc(k-Vector2(0,1),r*0.27,PI*1.1,PI*1.7,24,Color("b6849c"),1.5,true)
