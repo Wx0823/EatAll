@@ -1,0 +1,14 @@
+# Local credentials and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local caches and logs
+.DS_Store
+Thumbs.db
+__pycache__/
+*.py[cod]
+node_modules/
+*.log
