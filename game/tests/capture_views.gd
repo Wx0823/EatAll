@@ -43,4 +43,3 @@ func shot(filename: String) -> void:
 	var error: int = root.get_texture().get_image().save_png(output)
 	assert(error == OK)
 	print("CAPTURE ", output)
-

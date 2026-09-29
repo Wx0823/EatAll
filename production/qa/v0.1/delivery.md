@@ -35,3 +35,7 @@ SHA256：`6F2E816FE0EBEECB131721234C3BBC6593B875BCFA8F274253DCFD9D2F6AD54C`
 SHA256：`B4CB4AE0A16AC98A0D5C25C2DA4C5A63CA08A416C233EB410D4C0D263C463D0E`
 
 二进制与本机构建工具/签名保留在忽略目录，源代码与验收报告提交Git。尚未上传商店、创建云发布或承诺iOS支持。完整授权随包包含于assets，README提供重建入口。
+
+## 版本同步与复核
+
+实现提交 `0049b5e7bf180a39def7bbd1a5dc79485732e3b2` 已推送EatAll main并核对远程SHA。首次push遇连接重置，单次用 `git -c http.version=HTTP/1.1 push origin main` 重试成功，未改TLS校验或账号。源代码差异/忽略目录已检查，正式工具及密钥未入库；上游OFL原文保留一处行尾空格，非代码错误。测试文件多余EOF空行在交付文档整理时清理，不改变运行包内容。

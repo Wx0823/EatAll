@@ -59,6 +59,3 @@ INDEPENDENT_QA checks=539 failures=0
 主理人最终增补：依据Godot4.5.1源码，关闭SceneTree默认quit_on_go_back，避免Android返回键在自定义暂停逻辑之外直接退出。新增1项配置断言后主理人实际定向复跑UI141/0、exit0、日志干净。此增补为主理人复跑，前述140项才是独立QA本次执行计数；最终分发证据见delivery.md。
 
 本报告当前没有Android安装、真机触达、拇指长按、设备安全区、真实玩家体验或性能结论。桌面headless事件注入即使通过，也只能证明软件输入链路，不等于Android真机触控。APK构建和安装证据由主理人统一关联，未完成项保留。
-
-
-

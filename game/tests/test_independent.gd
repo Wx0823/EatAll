@@ -143,4 +143,3 @@ func _initialize() -> void:
 	for failure in failures:
 		print("FAIL " + failure)
 	quit(0 if failures.is_empty() else 1)
-
