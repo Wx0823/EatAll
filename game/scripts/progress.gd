@@ -1,7 +1,7 @@
 extends RefCounted
 
 static func defaults() -> Dictionary:
-	return {"version": 1, "completed": [], "left_handed": false, "sound": true}
+	return {"version": 1, "completed": [], "left_handed": false, "sound": true, "language": ""}
 
 static func _parse(path: String, count: int) -> Dictionary:
 	if not FileAccess.file_exists(path):
@@ -24,6 +24,10 @@ static func _parse(path: String, count: int) -> Dictionary:
 	clean.completed.sort()
 	clean.left_handed = data.get("left_handed", false) == true
 	clean.sound = data.get("sound", true) == true
+	# An absent/invalid preference follows the device without discarding progress.
+	var locale = data.get("language", "")
+	if locale is String and locale in ["", "zh_CN", "zh_TW", "en"]:
+		clean.language = locale
 	return clean
 
 static func load_data(path: String, count: int) -> Dictionary:

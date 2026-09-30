@@ -4,10 +4,12 @@ const Rules = preload("res://scripts/rules.gd")
 const Board = preload("res://scripts/board_renderer.gd")
 const Stick = preload("res://scripts/direction_pad.gd")
 const Progress = preload("res://scripts/progress.gd")
+const Localization = preload("res://scripts/localization.gd")
 const Sounds = preload("res://scripts/sfx.gd")
 const UiSkin = preload("res://scripts/ui_skin.gd")
 const MEADOW = preload("res://assets/art-v2/meadow.png")
 const HOME_MONSTER = preload("res://assets/art-v2/home-monster.png")
+const UNDO_ICON = preload("res://assets/ui-v5/undo.svg")
 const INK := Color("4d2543")
 const CORAL := Color("f87961")
 const CREAM := Color("fff3da")
@@ -58,6 +60,9 @@ var fail_reason := ""
 var terminal_delay := 0.0
 var layout_top := 24.0
 var layout_bottom := 20.0
+var language := "zh_CN"
+var overlay_kind := ""
+var status_hint_key := ""
 
 func _ready() -> void:
 	qa_mode = qa_mode or OS.get_cmdline_user_args().has("--qa")
@@ -81,6 +86,7 @@ func _ready() -> void:
 			push_error("Level %s: %s" % [level.id, errors])
 	var saved := Progress.load_data(save_path, levels.size())
 	progress = saved.data
+	language = Localization.normalize_locale(progress.language if not progress.language.is_empty() else OS.get_locale())
 	save_failed = saved.recovered
 	audio = Sounds.new()
 	add_child(audio)
@@ -108,6 +114,7 @@ func _label(parent: Node, text: String, font_size: int, color: Color = INK, cent
 	label.text = text
 	label.add_theme_color_override("font_color", color)
 	label.add_theme_font_size_override("font_size", font_size)
+	label.set_meta("base_font_size", font_size)
 	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER if center else HORIZONTAL_ALIGNMENT_LEFT
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -131,14 +138,58 @@ func _button(parent: Node, text: String, action: Callable, fill: Color = CREAM, 
 	b.add_theme_color_override("font_shadow_color", Color(1.0, 0.97, 0.85, 0.65))
 	b.add_theme_constant_override("shadow_offset_y", -1)
 	b.add_theme_font_size_override("font_size", font_size)
+	b.set_meta("base_font_size", font_size)
 	# Finish input dispatch before replacing any Control nodes in the tree.
 	b.pressed.connect(func(): action.call_deferred())
 	parent.add_child(b)
 	return b
 
 func _rect(node: Control, x: float, y: float, w: float, h: float) -> void:
+	_fit_text(node, w, h)
 	node.position = Vector2(x, y)
 	node.size = Vector2(w, h)
+
+func _undo_icon(button: Button) -> void:
+	button.icon = UNDO_ICON
+	button.expand_icon = true
+	button.add_theme_constant_override("icon_max_width", 20)
+
+func _fit_text(node: Control, w: float, h: float) -> void:
+	if not (node is Label or node is Button) or not node.has_meta("base_font_size"):
+		return
+	var font_size := int(node.get_meta("base_font_size"))
+	if w <= 0 or h <= 0:
+		node.add_theme_font_size_override("font_size", font_size)
+		return
+	var available := Vector2(w, h)
+	if node is Button:
+		var skin := node.get_theme_stylebox("normal")
+		available -= skin.get_minimum_size()
+		if node.icon:
+			available.x -= minf(node.icon.get_width(), 20) + node.get_theme_constant("h_separation")
+	while font_size > 10:
+		var measured: Vector2
+		if node is Label and node.autowrap_mode != TextServer.AUTOWRAP_OFF:
+			measured = font.get_multiline_string_size(node.text, HORIZONTAL_ALIGNMENT_LEFT, w, font_size)
+		else:
+			measured = font.get_string_size(node.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+		if measured.x <= available.x and measured.y <= available.y:
+			break
+		font_size -= 1
+	node.add_theme_font_size_override("font_size", font_size)
+
+func _t(key: String, args: Array = []) -> String:
+	return Localization.text(key, language, args)
+
+func _level_title(index: int) -> String:
+	if int(levels[index].id) < 1 or int(levels[index].id) > 12:
+		return String(levels[index].title) # Isolated QA levels are not shipped chapter text.
+	return Localization.level_title(int(levels[index].id), language)
+
+func _level_hint(index: int) -> String:
+	if int(levels[index].id) < 1 or int(levels[index].id) > 12:
+		return String(levels[index].hint)
+	return Localization.level_hint(int(levels[index].id), language)
 
 func _clear(node: Node) -> void:
 	for child in node.get_children():
@@ -155,6 +206,7 @@ func _reset_input() -> void:
 
 func _close_overlay() -> void:
 	_clear(overlay)
+	overlay_kind = ""
 	paused = false
 	if is_instance_valid(stick):
 		stick.enabled = mode == "play" and state.get("status", "") == "playing"
@@ -170,15 +222,15 @@ func _show_home() -> void:
 	mode = "home"
 	board = null
 	stick = null
-	var caption := _label(content, "P I C N I C   M O N S T E R", 13, INK, true)
+	var caption := _label(content, _t("home.caption"), 13, INK, true)
 	caption.name = "Caption"
-	var title := _label(content, "吃吃吃", 61, INK, true)
+	var title := _label(content, _t("home.title"), 61, INK, true)
 	title.add_theme_color_override("font_outline_color", Color("fff1ce"))
 	title.add_theme_constant_override("outline_size", 8)
 	title.add_theme_color_override("font_shadow_color", Color(0.31,0.15,0.22,0.18))
 	title.add_theme_constant_override("shadow_offset_y", 5)
 	title.name = "Title"
-	var subtitle := _label(content, "EAT ALL", 26, Color("d96b4c"), true)
+	var subtitle := _label(content, _t("home.subtitle"), 26, Color("d96b4c"), true)
 	subtitle.add_theme_color_override("font_outline_color", Color("fff1ce"))
 	subtitle.add_theme_constant_override("outline_size", 5)
 	subtitle.name = "Subtitle"
@@ -189,17 +241,17 @@ func _show_home() -> void:
 	hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.name = "Hero"
 	content.add_child(hero)
-	var line := _label(content, "一口点心，一场小冒险。", 18, INK, true)
+	var line := _label(content, _t("home.description"), 18, INK, true)
 	line.add_theme_color_override("font_outline_color", Color("fff3da"))
 	line.add_theme_constant_override("outline_size", 5)
 	line.name = "Tagline"
-	var start := _button(content, "开始野餐   →" if progress.completed.is_empty() else "继续野餐   →", start_level.bind(_next_level()), CORAL, 22)
+	var start := _button(content, _t("home.start" if progress.completed.is_empty() else "home.continue"), start_level.bind(_next_level()), CORAL, 22)
 	start.name = "Start"
-	var select := _button(content, "选择关卡", show_levels, CREAM)
+	var select := _button(content, _t("home.levels"), show_levels, CREAM)
 	select.name = "Select"
-	var settings := _button(content, "设置", _settings, MINT, 16)
+	var settings := _button(content, _t("home.settings"), _settings, MINT, 16)
 	settings.name = "Settings"
-	var foot := _label(content, "烘焙野餐  ·  12 道小谜题", 13, INK, true)
+	var foot := _label(content, _t("home.footer"), 13, INK, true)
 	foot.add_theme_color_override("font_outline_color", CREAM)
 	foot.add_theme_constant_override("outline_size", 4)
 	foot.name = "Footer"
@@ -227,17 +279,17 @@ func show_levels() -> void:
 	stick = null
 	var back := _button(content, "←", _show_home)
 	back.name = "Back"
-	var title := _label(content, "烘焙野餐", 32, INK, true)
+	var title := _label(content, _t("levels.title"), 32, INK, true)
 	title.name = "Title"
-	var sub := _label(content, "%d / 12  已完成" % progress.completed.size(), 17, Color("93707b"), true)
+	var sub := _label(content, _t("levels.completed", [progress.completed.size()]), 17, Color("93707b"), true)
 	sub.name = "Subtitle"
 	for i in levels.size():
 		var done: bool = progress.completed.has(i)
 		var b := _button(content, "%02d%s" % [i+1, "  ✓" if done else ""], start_level.bind(i), Color("dce7c9") if done else CREAM, 25)
 		b.name = "Level%d" % i
 		b.disabled = i > _unlocked()
-		b.tooltip_text = levels[i].title if not b.disabled else "完成前一关解锁"
-	var note := _label(content, "慢慢想，放心试。每一步都能撤销。", 15, Color("826d78"), true)
+		b.tooltip_text = _level_title(i) if not b.disabled else _t("levels.locked")
+	var note := _label(content, _t("levels.note"), 15, Color("826d78"), true)
 	note.add_theme_color_override("font_outline_color", CREAM)
 	note.add_theme_constant_override("outline_size", 4)
 	note.name = "Footer"
@@ -255,14 +307,17 @@ func start_level(index: int) -> void:
 	state = Rules.initial_state(levels[index])
 	history.clear()
 	fail_reason = ""
-	var tag := _label(content, "烘焙野餐   /   %02d" % (index + 1), 12, Color("8b5769"))
+	status_hint_key = ""
+	status_time = 0.0
+	var tag := _label(content, _t("hud.chapter", [index + 1]), 12, Color("8b5769"))
 	tag.name = "Tag"
-	var title := _label(content, levels[index].title, 25)
+	var title := _label(content, _level_title(index), 25)
 	title.add_theme_color_override("font_shadow_color", Color("fff9e5"))
 	title.add_theme_constant_override("shadow_offset_y", -1)
 	title.name = "Title"
 	var pause := _button(content, "Ⅱ", pause_game, CREAM, 24)
 	pause.name = "Pause"
+	pause.tooltip_text = _t("hud.pause")
 	counter = _label(content, "", 19, INK, true)
 	counter.name = "Counter"
 	step_label = _label(content, "", 14, Color("93707b"), true)
@@ -272,18 +327,20 @@ func start_level(index: int) -> void:
 	board.clip_contents = true
 	content.add_child(board)
 	board.set_data(levels[index], state)
-	hint_label = _label(content, levels[index].hint, 16, INK, true)
+	hint_label = _label(content, _level_hint(index), 16, INK, true)
 	hint_label.name = "Hint"
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stick = Stick.new()
 	stick.name = "Stick"
 	content.add_child(stick)
 	stick.direction_changed.connect(_on_direction)
-	undo_button = _button(content, "↶  撤销", undo, CREAM, 18)
+	_localize_direction_keys()
+	undo_button = _button(content, _t("controls.undo"), undo, CREAM, 18)
+	_undo_icon(undo_button)
 	undo_button.name = "Undo"
-	var restart := _button(content, "重开", restart_level, Color("e6eddc"), 16)
+	var restart := _button(content, _t("controls.restart"), restart_level, Color("e6eddc"), 16)
 	restart.name = "Restart"
-	var tip := _label(content, "短按一步 · 长按连走", 12, Color("7e5565"), true)
+	var tip := _label(content, _t("controls.tip"), 12, Color("7e5565"), true)
 	tip.name = "ControlTip"
 	_update_hud()
 	_layout()
@@ -350,9 +407,11 @@ func _update_hud(visible_state: Dictionary = {}) -> void:
 		return
 	var total: int = levels[level_index].fruit.size()
 	var shown := state if visible_state.is_empty() else visible_state
-	counter.text = "点心  %d / %d%s" % [total-shown.fruit.size(), total, "  ·  出口已打开" if shown.fruit.is_empty() else ""]
-	counter.add_theme_font_size_override("font_size", 14 if shown.fruit.is_empty() else 16)
-	step_label.text = "%d 步" % state.moves
+	counter.text = _t("hud.food_open" if shown.fruit.is_empty() else "hud.food", [total-shown.fruit.size(), total])
+	counter.set_meta("base_font_size", 14 if shown.fruit.is_empty() else 16)
+	_fit_text(counter, counter.size.x, counter.size.y)
+	step_label.text = _t("hud.moves", [state.moves])
+	_fit_text(step_label, step_label.size.x, step_label.size.y)
 	undo_button.disabled = history.is_empty()
 
 func _on_direction(d: Vector2i) -> void:
@@ -375,7 +434,9 @@ func try_move(d: Vector2i) -> bool:
 		repeat_blocked = true
 		board.react("blocked", d)
 		audio.play("blocked")
-		hint_label.text = "转个方向试试，不能直接掉头。" if result.reason == "reverse" else "这里被挡住啦，换条路试试。"
+		status_hint_key = "hint.reverse" if result.reason == "reverse" else "hint.blocked"
+		hint_label.text = _t(status_hint_key)
+		_fit_text(hint_label, hint_label.size.x, hint_label.size.y)
 		status_time = 1.2
 		return false
 	history.append(state.duplicate(true))
@@ -419,7 +480,9 @@ func _process(delta: float) -> void:
 	if status_time > 0:
 		status_time -= delta
 		if status_time <= 0 and state.status == "playing":
-			hint_label.text = levels[level_index].hint
+			status_hint_key = ""
+			hint_label.text = _level_hint(level_index)
+			_fit_text(hint_label, hint_label.size.x, hint_label.size.y)
 	# Repeat time is measured from the accepted input, including its animation.
 	# Never replay missed ticks after a stall or a long gravity round.
 	if held != Vector2i.ZERO:
@@ -557,7 +620,9 @@ func undo() -> void:
 	board.set_data(levels[level_index], state)
 	stick.enabled = true
 	_reset_input()
-	hint_label.text = "回到上一步，换个办法！"
+	status_hint_key = "hint.undo"
+	hint_label.text = _t(status_hint_key)
+	_fit_text(hint_label, hint_label.size.x, hint_label.size.y)
 	status_time = 1.2
 	_update_hud()
 	audio.play("undo")
@@ -581,8 +646,10 @@ func _panel(title: String, subtitle: String, height: float = 322) -> Panel:
 	panel.add_theme_stylebox_override("panel", UiSkin.panel("cream"))
 	overlay.add_child(panel)
 	var heading := _label(panel, title, 29, INK, true)
+	heading.name = "Heading"
 	_rect(heading, 12, 22, panel.size.x-24, 49)
 	var sub := _label(panel, subtitle, 16, Color("8c6677"), true)
+	sub.name = "Description"
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_rect(sub, 22, 79, panel.size.x-44, 65)
 	_layout()
@@ -590,21 +657,24 @@ func _panel(title: String, subtitle: String, height: float = 322) -> Panel:
 
 func _end_panel(won: bool) -> void:
 	var final := level_index == levels.size()-1
-	var title := "野餐圆满！" if won and final else ("吃得漂亮！" if won else "差一点点！")
-	var subtitle := "12道小谜题，全部尝过啦。" if won and final else ("点心吃光，成功回到野餐篮。" if won else ("掉出棋盘啦，留住一个支点试试。" if fail_reason == "boundary" else "身体碰到尖刺了，撤销再试一次。"))
+	var title := _t("end.final_title" if won and final else ("end.win_title" if won else "end.lose_title"))
+	var subtitle := _t("end.final_description" if won and final else ("end.win_description" if won else ("end.boundary_description" if fail_reason == "boundary" else "end.spike_description")))
 	if save_failed and won:
-		subtitle += "\n进度暂未保存，可点重试保存。"
+		subtitle += "\n" + _t("end.save_failed")
 	var panel := _panel(title, subtitle, 370 if save_failed and won else 328)
+	overlay_kind = "end"
 	var action := show_levels if won and final else (start_level.bind(level_index+1) if won else undo)
-	var primary := _button(panel, "返回关卡" if won and final else ("下一道点心  →" if won else "↶  撤销一步"), action, CORAL, 20)
+	var primary := _button(panel, _t("end.back_levels" if won and final else ("end.next" if won else "end.undo")), action, CORAL, 20)
+	if not won:
+		_undo_icon(primary)
 	primary.name = "Continue"
 	_rect(primary, 26, 162, panel.size.x-52, 57)
-	var secondary := _button(panel, "再玩一次" if won else "重新开始", restart_level, CREAM, 17)
+	var secondary := _button(panel, _t("end.replay" if won else "end.restart"), restart_level, CREAM, 17)
 	_rect(secondary, 26, 233, (panel.size.x-66)*0.60, 48)
-	var home := _button(panel, "选关", show_levels, MINT, 17)
+	var home := _button(panel, _t("end.levels"), show_levels, MINT, 17)
 	_rect(home, 40+(panel.size.x-66)*0.60, 233, (panel.size.x-66)*0.40, 48)
 	if save_failed and won:
-		var retry := _button(panel, "重试保存", _retry_save, CREAM, 14)
+		var retry := _button(panel, _t("end.retry_save"), _retry_save, CREAM, 14)
 		_rect(retry, 26, 300, panel.size.x-52, 43)
 
 func _retry_save() -> void:
@@ -620,23 +690,102 @@ func pause_game() -> void:
 		return
 	paused = true
 	board.set_process(false)
-	var panel := _panel("歇一小口", "棋盘会等你，慢慢想。", 334)
-	var resume := _button(panel, "继续游戏", _close_overlay, CORAL, 21)
+	_show_pause_panel()
+
+func _show_pause_panel() -> void:
+	var panel := _panel(_t("pause.title"), _t("pause.description"), 334)
+	overlay_kind = "pause"
+	var resume := _button(panel, _t("pause.resume"), _close_overlay, CORAL, 21)
 	resume.name = "Resume"
 	_rect(resume, 26, 150, panel.size.x-52, 58)
-	var restart := _button(panel, "重新开始", restart_level, CREAM)
+	var restart := _button(panel, _t("end.restart"), restart_level, CREAM)
 	_rect(restart, 26, 225, (panel.size.x-68)*0.6, 49)
-	var levels_b := _button(panel, "选关", show_levels, MINT)
+	var levels_b := _button(panel, _t("end.levels"), show_levels, MINT)
 	_rect(levels_b, 42+(panel.size.x-68)*0.6, 225, (panel.size.x-68)*0.4, 49)
 
 func _settings() -> void:
-	var panel := _panel("小小设置", "放松一点，按自己的习惯来。", 371)
-	var hand := _button(panel, "方向键位置：%s" % ("右手" if progress.left_handed else "左手"), _toggle_hand, CREAM, 17)
+	var panel := _panel(_t("settings.title"), _t("settings.description"), 437)
+	overlay_kind = "settings"
+	var hand := _button(panel, _t("settings.hand", [_t("settings.right_hand" if progress.left_handed else "settings.left_hand")]), _toggle_hand, CREAM, 17)
+	hand.name = "Hand"
 	_rect(hand, 25, 145, panel.size.x-50, 51)
-	var sound := _button(panel, "音效：%s" % ("开" if progress.sound else "关"), _toggle_sound, CREAM, 17)
+	var sound := _button(panel, _t("settings.sound", [_t("settings.on" if progress.sound else "settings.off")]), _toggle_sound, CREAM, 17)
+	sound.name = "Sound"
 	_rect(sound, 25, 211, panel.size.x-50, 51)
-	var back := _button(panel, "完成", _close_overlay, CORAL)
-	_rect(back, 25, 284, panel.size.x-50, 52)
+	var selected_name := _t("settings.follow_system") if progress.language.is_empty() else Localization.language_name(language)
+	var language_button := _button(panel, _t("settings.language", [selected_name]), _language_settings, CREAM, 17)
+	language_button.name = "Language"
+	_rect(language_button, 25, 277, panel.size.x-50, 51)
+	var back := _button(panel, _t("settings.done"), _close_overlay, CORAL)
+	back.name = "Done"
+	_rect(back, 25, 350, panel.size.x-50, 52)
+
+func _language_settings() -> void:
+	var panel := _panel(_t("settings.language_title"), _t("settings.language_description"), 465)
+	overlay_kind = "language"
+	var options := ["", "zh_CN", "zh_TW", "en"]
+	var node_names := ["LocaleSystem", "LocaleZhCN", "LocaleZhTW", "LocaleEn"]
+	for i in options.size():
+		var locale: String = options[i]
+		var selected: bool = progress.language == locale
+		var name_text := _t("settings.follow_system") + " · " + Localization.language_name(Localization.system_locale()) if locale.is_empty() else Localization.language_name(locale)
+		var option := _button(panel, name_text + ("  ✓" if selected else ""), _choose_language.bind(locale), MINT if selected else CREAM, 17)
+		option.name = node_names[i]
+		_rect(option, 25, 144+i*57, panel.size.x-50, 48)
+	var done := _button(panel, _t("settings.done"), _settings, CORAL)
+	done.name = "Done"
+	_rect(done, 25, 386, panel.size.x-50, 51)
+
+func _choose_language(locale: String) -> void:
+	_set_language(locale)
+	_settings()
+
+func _set_language(locale: String) -> bool:
+	if not locale.is_empty() and not locale in Localization.SUPPORTED_LOCALES:
+		return false
+	progress.language = locale
+	language = Localization.system_locale() if locale.is_empty() else locale
+	save_failed = not Progress.save_data(save_path, progress)
+	_refresh_texts()
+	return true
+
+func _localize_direction_keys() -> void:
+	if not is_instance_valid(stick):
+		return
+	var keys := {Vector2i.UP:"controls.up", Vector2i.RIGHT:"controls.right", Vector2i.DOWN:"controls.down", Vector2i.LEFT:"controls.left"}
+	for direction in keys:
+		stick.buttons[direction].tooltip_text = _t(keys[direction])
+
+func _refresh_texts() -> void:
+	if not is_instance_valid(content):
+		return
+	if mode == "home":
+		var home_keys := {"Caption":"home.caption", "Title":"home.title", "Subtitle":"home.subtitle", "Tagline":"home.description", "Start":"home.start" if progress.completed.is_empty() else "home.continue", "Select":"home.levels", "Settings":"home.settings", "Footer":"home.footer"}
+		for name_key in home_keys:
+			content.get_node(name_key).text = _t(home_keys[name_key])
+	elif mode == "select":
+		content.get_node("Title").text = _t("levels.title")
+		content.get_node("Subtitle").text = _t("levels.completed", [progress.completed.size()])
+		content.get_node("Footer").text = _t("levels.note")
+		for i in levels.size():
+			var button: Button = content.get_node("Level%d" % i)
+			button.tooltip_text = _level_title(i) if not button.disabled else _t("levels.locked")
+	elif mode == "play":
+		content.get_node("Tag").text = _t("hud.chapter", [level_index+1])
+		content.get_node("Title").text = _level_title(level_index)
+		content.get_node("Pause").tooltip_text = _t("hud.pause")
+		undo_button.text = _t("controls.undo")
+		content.get_node("Restart").text = _t("controls.restart")
+		content.get_node("ControlTip").text = _t("controls.tip")
+		hint_label.text = _t(status_hint_key) if status_time > 0 and not status_hint_key.is_empty() else _level_hint(level_index)
+		_localize_direction_keys()
+		_update_hud(board.state if busy else {})
+	_layout()
+	match overlay_kind:
+		"settings": _settings()
+		"language": _language_settings()
+		"pause": _show_pause_panel()
+		"end": _end_panel(state.status == "won")
 
 func _toggle_hand() -> void:
 	progress.left_handed = not progress.left_handed
@@ -671,7 +820,12 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_on_direction(dir if event.pressed else Vector2i.ZERO)
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+	if what == NOTIFICATION_APPLICATION_FOCUS_IN and not progress.is_empty() and progress.get("language", "").is_empty():
+		var current := Localization.system_locale()
+		if current != language:
+			language = current
+			_refresh_texts()
+	elif what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		_reset_input()
 		if mode == "play" and is_instance_valid(content):
 			pause_game()

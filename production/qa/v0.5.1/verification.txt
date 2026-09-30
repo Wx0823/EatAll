@@ -1,0 +1,47 @@
+2026-09-30 EatAll v0.5.1, base 6974d4c
+Godot 4.5.1, Windows; native LDPlayer14 instance 1, Android14, 720x1280
+
+Independent tools/test.ps1 exit=0
+rules=412, independent=539, UI=141, motion=73, responsiveness=321,
+fall_food=44, direction_pad=75, localization=1489
+total=3094 failures=0 (full-test.txt)
+capture_localization.gd 29 images, failures=0 (capture.txt)
+
+tools/build.ps1 -Target All exit=0
+APK bytes=107406110
+APK SHA256=1C8CBEC5D8F9C5706DC614A09FE250E6F33B1F953FD8301833546F421AD6F455
+EXE bytes=118877920
+EXE SHA256=C6F7E3E81AE2AD69EEF8CAC8947E81256B7A25608B1F748824A967BF80813904
+apksigner verify --verbose exit=0: Verifies, v2=true, v3=true, Number of signers=1
+Windows final headless --quit-after 45 exit=0: engine version only (windows-runtime.txt)
+
+adb install -r final APK: Success
+Installed package: versionCode=7 minSdk=24 targetSdk=35 versionName=0.5.1
+getprop persist.sys.locale: zh-CN (unchanged during test)
+get-app-locales before/after: []
+App system locale test: zh-TW then en-US then zh-TW, restored []
+Actual OS default first launch: simplified Chinese
+Manual English + restart under zh-TW app system locale: English persists
+Select follow system under zh-TW: traditional Chinese immediately
+Follow system cold start under en-US: English
+L12 right button 60ms: Steps 1 / Treats 1/3, undo SVG visible
+Follow system cold start under zh-TW: traditional L12 title/hint/control text
+Restored [] + follow system: simplified picker selected
+
+Private before/after progress comparison (user save not included):
+CompletedPreserved=True
+HandPreserved=True
+SoundPreserved=True
+FollowSystemRestored=True
+SaveVersion=1
+
+Native startup triage excerpt:
+I/ActivityManager(339): Killing 15668:org.wx0823.eatall/u0a77 (adj -10000): remove task
+Recovered via force-stop then am start -f 0x10008000 (NEW_TASK|CLEAR_TASK)
+No pm clear; complete native game screenshots taken after recovered launch.
+
+Native filtered log: no SCRIPT ERROR, FATAL EXCEPTION, triangulation failed, can_process.
+Known emulator error remains on each cold start:
+E/godot: ERROR: FeedShaderGLES3: Fragment shader compilation failed
+2D game UI displayed normally; cause not resolved and no true-phone coverage claim.
+See delivery.md and native-01..12 screenshots for scope and limitations.

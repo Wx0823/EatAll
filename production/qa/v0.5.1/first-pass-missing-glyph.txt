@@ -1,0 +1,10 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+ERROR: LOCALIZATION QA: Font includes U+21B6
+   at: push_error (core/variant/variant_utility.cpp:1024)
+   GDScript backtrace (most recent call first):
+       [0] check (res://tests/test_localization.gd:13)
+       [1] verify_catalog (res://tests/test_localization.gd:81)
+       [2] verify_runtime (res://tests/test_localization.gd:88)
+       [3] run (res://tests/test_localization.gd:44)
+LOCALIZATION_QA checks=1469 failures=1

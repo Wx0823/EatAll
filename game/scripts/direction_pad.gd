@@ -25,7 +25,6 @@ func _ready() -> void:
 		var button := Button.new()
 		button.name = KEY_NAMES[index]
 		button.text = ARROWS[index]
-		button.tooltip_text = ["上", "右", "下", "左"][index]
 		# Raw touch/mouse has one owner; GUI emulation must not press a second time.
 		button.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		button.focus_mode = Control.FOCUS_NONE
