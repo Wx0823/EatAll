@@ -10,7 +10,7 @@ func _ready() -> void:
 		player.volume_db = -16
 		add_child(player)
 		voices.append(player)
-	for name in ["move", "eat", "undo", "lost", "won", "tap"]:
+	for name in ["move", "eat", "undo", "lost", "won", "tap", "blocked", "land"]:
 		sounds[name] = _make(name)
 
 func _make(kind: String) -> AudioStreamWAV:
@@ -22,6 +22,8 @@ func _make(kind: String) -> AudioStreamWAV:
 		"lost": base = 240; duration = 0.27
 		"won": base = 520; duration = 0.50
 		"tap": base = 480; duration = 0.07
+		"blocked": base = 140; duration = 0.11
+		"land": base = 180; duration = 0.13
 	var bytes := PackedByteArray()
 	var rate := 22050
 	var count := int(duration * rate)
@@ -31,11 +33,14 @@ func _make(kind: String) -> AudioStreamWAV:
 		var t := float(i) / rate
 		var freq := base
 		if kind == "eat": freq *= 1.0 + t * 3.5
+		if kind == "blocked" or kind == "land": freq *= 1.0 - t * 4.0
 		if kind == "undo" or kind == "lost": freq *= 1.0 - t * 1.8
 		if kind == "won": freq *= [1.0, 1.25, 1.5, 2.0][mini(int(t * 8), 3)]
 		phase += TAU * freq / rate
 		var envelope := minf(t * 120, 1.0) * pow(1.0 - float(i) / count, 1.8)
-		bytes.encode_s16(i * 2, int(sin(phase) * envelope * 12000))
+		var tone := sin(phase)
+		if kind == "eat": tone = sin(phase) * 0.7 + sin(phase * 0.5) * 0.3
+		bytes.encode_s16(i * 2, int(tone * envelope * (4500 if kind == "move" else 12000)))
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.mix_rate = rate

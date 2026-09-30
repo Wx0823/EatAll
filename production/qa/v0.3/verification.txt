@@ -1,0 +1,15 @@
+Actual execution excerpts, Godot 4.5.1, 2026-09-30. No device FPS claim.
+
+tests-v03-final.log
+RULES RESULT: 410 checks, 0 failures
+INDEPENDENT_QA checks=539 failures=0
+INDEPENDENT_UI_QA checks=141 failures=0
+CADENCE dt=0.01 accepted starts seconds=[0.0, 0.16, 0.32, 0.48, 0.64, 0.8, 0.96, 1.12, 1.28, 1.44, 1.6, 1.76, 1.92]
+CADENCE dt=1/60 accepted starts seconds=[0.0, 0.1667, 0.3333, 0.5, 0.6667, 0.8333, 1.0, 1.1667, 1.3333, 1.5, 1.6667, 1.8333, 2.0]
+FALL head y at 40ms spacing=[3.0, 3.12800002098084, 3.51200008392334, 4.15199995040894, 5.04800033569336]
+MOTION REVIEW checks=73 failures=0
+
+movie-v03.log
+MOTION_CAPTURE native touch scenarios completed; failures=0
+Done recording movie at path: E:/吃吃吃/.tools/motion-v03.avi
+438 frames at 60 FPS (movie length: 00:00:07:18), recorded in 00:00:07 (100% of real-time speed).

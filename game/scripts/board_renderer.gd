@@ -8,6 +8,13 @@ var cell: float = 32.0
 var origin: Vector2 = Vector2.ZERO
 var sprites: Array[AtlasTexture] = []
 var surprised_face: AtlasTexture
+var motion_active: bool = false
+var facing_direction: Vector2i = Vector2i.ZERO
+var _reaction_time: Dictionary = {}
+var _particles: Array[Dictionary] = []
+var _motion_clock: float = 0.0
+var _frame_meshes: Array[ArrayMesh] = []
+const REACTION_LENGTH := {"move":0.16, "eat":0.72, "fall":0.65, "land":0.34, "blocked":0.24, "lost":0.65, "won":1.05}
 const ATLAS_PATH := "res://assets/art-v2/gameplay-atlas.png"
 const SURPRISED_PATH := "res://assets/art-v2/head-surprised.png"
 # Measured against the 1536x1024 source at alpha > 40; exclude near-transparent
@@ -22,6 +29,92 @@ func set_data(new_level: Dictionary, new_state: Dictionary) -> void:
 	level = new_level
 	state = new_state
 	queue_redraw()
+
+func react(kind: String, direction: Vector2i = Vector2i.ZERO) -> void:
+	if not REACTION_LENGTH.has(kind):
+		return
+	_reaction_time[kind] = 0.0
+	if direction != Vector2i.ZERO:
+		facing_direction = direction
+	if kind == "land" or kind == "lost" or kind == "won":
+		_reaction_time.erase("fall")
+	if kind in ["eat", "land", "won", "lost"]:
+		_emit_particles(kind)
+	queue_redraw()
+
+func clear_reactions() -> void:
+	_reaction_time.clear()
+	_particles.clear()
+	_motion_clock = 0.0
+	motion_active = false
+	facing_direction = Vector2i.ZERO
+	queue_redraw()
+
+func _process(delta: float) -> void:
+	var changed := motion_active or not _reaction_time.is_empty() or not _particles.is_empty()
+	if motion_active:
+		_motion_clock += delta
+	for kind in _reaction_time.keys():
+		_reaction_time[kind] += delta
+		if _reaction_time[kind] >= REACTION_LENGTH[kind]:
+			_reaction_time.erase(kind)
+	for index in range(_particles.size() - 1, -1, -1):
+		_particles[index].age += delta
+		if _particles[index].age >= _particles[index].life:
+			_particles.remove_at(index)
+	if changed:
+		queue_redraw()
+
+func _reaction(kind: String) -> float:
+	if not _reaction_time.has(kind):
+		return 0.0
+	return 1.0 - float(_reaction_time[kind]) / float(REACTION_LENGTH[kind])
+
+func _emit_particles(kind: String) -> void:
+	var body: Array = body_override if not body_override.is_empty() else state.get("body", [])
+	if body.is_empty():
+		return
+	var center := Vector2(body[0]) + Vector2(0.5, 0.04)
+	if kind == "eat":
+		center = Vector2(body[0]) + Vector2(0.28 if facing_direction.x < 0 else 0.72, 0.53)
+	elif kind == "land":
+		center = Vector2(body[0]) + Vector2(0.5, 0.87)
+		for segment in body:
+			if level.get("terrain", []).has(Vector2i(segment) + Vector2i.DOWN):
+				center = Vector2(segment) + Vector2(0.5, 0.87)
+				break
+	var count := 12 if kind == "won" else 6
+	for index in range(count):
+		var phase := float(index) / count
+		var velocity := Vector2(cos(phase * TAU) * 0.9, -1.0 - absf(sin(phase * 9.0)) * 1.2)
+		var color := Color("ffe8b5")
+		if kind == "won":
+			color = [Color("ffe8b5"), Color("ef8b69"), Color("8ead73")][index % 3]
+			velocity *= 1.4
+		elif kind == "lost":
+			color = Color("aa7292")
+		elif kind == "land":
+			velocity *= 0.5
+		_particles.append({"center":center,"velocity":velocity,"color":color,"age":0.0,"life":0.9 if kind == "won" else 0.48,"spin":phase * TAU,"kind":kind})
+	while _particles.size() > 32:
+		_particles.pop_front()
+
+func _draw_particles() -> void:
+	for particle in _particles:
+		var age: float = particle.age
+		var position_grid: Vector2 = particle.center + particle.velocity * age + Vector2(0, age * age * 2.1)
+		var color: Color = particle.color
+		color.a = minf(1.0, (float(particle.life) - age) * 6.0)
+		var p := origin + position_grid * cell
+		if particle.kind == "won" or particle.kind == "lost":
+			var radius := cell * (0.045 if particle.kind == "won" else 0.035)
+			var star := PackedVector2Array()
+			for tip in range(8):
+				var angle := float(tip) * PI / 4.0 + float(particle.spin) + age * 3.0
+				star.append(p + Vector2(cos(angle), sin(angle)) * radius * (1.0 if tip % 2 == 0 else 0.35))
+			draw_colored_polygon(star, color)
+		else:
+			_circle(p, cell * 0.027, color)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -53,6 +146,8 @@ func _circle(p: Vector2, radius: float, color: Color) -> void:
 	draw_circle(p, radius, color, true, -1.0, true)
 
 func _draw() -> void:
+	# Canvas drawing keeps RIDs, so retain meshes until this draw list is replaced.
+	_frame_meshes.clear()
 	if level.is_empty():
 		return
 	var columns := int(level.get("width", 9))
@@ -86,19 +181,57 @@ func _draw() -> void:
 					break
 	for food in state.get("fruit", level.get("fruit", [])):
 		_sprite(2, _point(food), Vector2.ONE * cell * 0.64)
+	_draw_particles()
 
 func _sprite(index: int, p: Vector2, bounds: Vector2, flip: bool = false, tint: Color = Color.WHITE) -> void:
 	if sprites.size() != 6:
 		return
 	var sprite := sprites[index]
-	if index == 0 and surprised_face != null and (state.get("status", "playing") == "lost" or mood == "sad"):
+	if index == 0 and surprised_face != null and (state.get("status", "playing") == "lost" or mood == "sad" or _reaction("fall") > 0.0 or _reaction("blocked") > 0.0):
 		sprite = surprised_face
 	var scale_factor := minf(bounds.x / sprite.get_width(), bounds.y / sprite.get_height())
 	var dimensions := sprite.get_size() * scale_factor
 	var rect := Rect2(p - dimensions * 0.5, dimensions)
 	if flip:
 		rect.size.x = -dimensions.x
+	if index == 0:
+		var pose := _head_pose()
+		draw_set_transform(p + pose.offset * cell, pose.angle, pose.scale)
+		rect.position -= p
 	draw_texture_rect(sprite, rect, false, tint)
+	if index == 0:
+		draw_set_transform(Vector2.ZERO)
+
+func _head_pose() -> Dictionary:
+	var stretch := Vector2.ONE
+	var angle := 0.0
+	var offset := Vector2.ZERO
+	var move := _reaction("move")
+	if motion_active:
+		angle += sin(_motion_clock * 18.0) * 0.024
+	stretch += Vector2(0.065, -0.050) * sin(move * PI)
+	angle += float(facing_direction.x) * sin(move * PI) * 0.045
+	var eat := _reaction("eat")
+	if eat > 0:
+		var chew := sin((1.0 - eat) * TAU * 3.0) * eat
+		stretch += Vector2(0.085, -0.070) * chew
+		angle += chew * 0.045
+	var fall := _reaction("fall")
+	stretch += Vector2(-0.040, 0.055) * minf(fall * 3.0, 1.0)
+	var land := _reaction("land")
+	var spring := sin((1.0 - land) * TAU * 1.5) * land
+	stretch += Vector2(0.105, -0.085) * spring
+	offset.y += spring * 0.018
+	var blocked := _reaction("blocked")
+	offset.x += sin((1.0 - blocked) * TAU * 2.0) * blocked * 0.036
+	angle += sin((1.0 - blocked) * TAU * 2.0) * blocked * 0.065
+	var won := _reaction("won")
+	angle += sin((1.0 - won) * TAU * 2.0) * won * 0.09
+	offset.y -= absf(sin((1.0 - won) * TAU * 2.0)) * won * 0.045
+	var lost := _reaction("lost")
+	angle += sin((1.0 - lost) * TAU * 2.5) * lost * 0.055
+	stretch = stretch.clamp(Vector2(0.89, 0.89), Vector2(1.12, 1.12))
+	return {"scale":stretch,"angle":angle,"offset":offset}
 
 func _danger_marker(p: Vector2) -> void:
 	# Body and hazards can legally overlap only in the final failed snapshot.
@@ -114,6 +247,13 @@ func _danger_marker(p: Vector2) -> void:
 			draw_polyline(marks, Color("c65857"), maxf(1.4, cell * 0.035), true)
 
 func _curve(points: PackedVector2Array) -> PackedVector2Array:
+	# During growth the interpolated new tail starts on the old tail. Remove
+	# zero-length links before calculating tangents and surface cross-sections.
+	var distinct := PackedVector2Array()
+	for point in points:
+		if distinct.is_empty() or point.distance_squared_to(distinct[-1]) > 0.0001:
+			distinct.append(point)
+	points = distinct
 	var smooth := PackedVector2Array()
 	if points.size() < 3:
 		if points.size() < 2:
@@ -155,6 +295,10 @@ func _tube(path: PackedVector2Array, radius: float, offset: Vector2, color: Colo
 		var wave := sin(lengths[i] / cell * 4.3 + 0.8) * sin(PI * clampf(lengths[i] / maxf(total, 1.0), 0.0, 1.0))
 		var belly := radius < cell * 0.18
 		var local_radius := lerpf(cell * tail, radius, smoothstep(0.0, 1.0, tail_factor))
+		if _reaction_time.has("eat"):
+			var wave_center := float(_reaction_time.eat) * 8.0
+			var distance_from_wave := lengths[i] / cell - wave_center
+			local_radius *= 1.0 + exp(-distance_from_wave * distance_from_wave * 6.0) * 0.065 * _reaction("eat")
 		if belly:
 			local_radius *= 1.0 + wave * 0.12
 		var local_offset := offset * lerpf(0.1, 1.0, tail_factor)
@@ -163,15 +307,33 @@ func _tube(path: PackedVector2Array, radius: float, offset: Vector2, color: Colo
 		var tail_curl := Vector2(0, -0.10 * pow(1.0 - tail_factor, 2.0)) * cell
 		left.append(path[i] + local_offset + tail_curl + normal * local_radius)
 		right.append(path[i] + local_offset + tail_curl - normal * local_radius)
-	var polygon := left.duplicate()
-	for i in range(right.size() - 1, -1, -1):
-		polygon.append(right[i])
-	draw_colored_polygon(polygon, color)
+	# A tight elbow can have a curvature radius smaller than the tube radius.
+	# Its inner offsets then overlap, so a single closed outline is not a simple
+	# polygon. Build the swept surface directly from adjacent cross-sections;
+	# overlapping same-color triangles fill the bend without polygon triangulation.
+	# One mesh per wash also avoids one draw call per sampled segment.
+	var vertices := PackedVector3Array()
+	var indices := PackedInt32Array()
+	for i in range(left.size()):
+		vertices.append(Vector3(left[i].x, left[i].y, 0))
+		vertices.append(Vector3(right[i].x, right[i].y, 0))
+		if i > 0:
+			var previous := (i - 1) * 2
+			var current := i * 2
+			indices.append_array(PackedInt32Array([previous, current, previous + 1, previous + 1, current, current + 1]))
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var surface := ArrayMesh.new()
+	surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	_frame_meshes.append(surface)
+	draw_mesh(surface, null, Transform2D.IDENTITY, color)
 	_circle(path[0] + offset, radius, color)
 	_circle(path[-1] + offset * 0.1 + Vector2(0, -0.10) * cell, cell * tail, color)
 	# A thin antialiased edge gives the contour soft ink without dark pipe outlines.
-	polygon.append(polygon[0])
-	draw_polyline(polygon, color, 1.0, true)
+	draw_polyline(left, color, 1.0, true)
+	draw_polyline(right, color, 1.0, true)
 
 func _body(snake: Array) -> void:
 	if snake.is_empty():
@@ -209,6 +371,8 @@ func _body(snake: Array) -> void:
 	var direction := Vector2.RIGHT
 	if points.size() > 1:
 		direction = (points[0] - points[1]).normalized()
+	if facing_direction != Vector2i.ZERO:
+		direction = Vector2(facing_direction)
 	# Keep expressive paired eyes upright. Horizontal mirror signals facing direction;
 	# vertical intent is supplied by the neck rather than rotating the face sideways.
 	_sprite(0, points[0] + Vector2(0, -0.12) * cell, Vector2(1.05, 1.20) * cell, direction.x < -0.2)

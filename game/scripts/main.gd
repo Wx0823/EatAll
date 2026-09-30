@@ -12,6 +12,8 @@ const INK := Color("4d2543")
 const CORAL := Color("f87961")
 const CREAM := Color("fff3da")
 const MINT := Color("dfe9d6")
+const MOVE_SECONDS := 0.16
+const FALL_ACCELERATION := 160.0 # Grid cells / second²; one continuous fall.
 
 var save_path := "user://progress.json"
 var qa_mode := false
@@ -36,16 +38,20 @@ var hint_label: Label
 var undo_button: Button
 var font: Font
 var held := Vector2i.ZERO
-var repeat_clock := 0.35
+var repeat_clock := MOVE_SECONDS
 var repeat_blocked := false
 var pending_turn := false
 var animation_frames: Array = []
 var animation_from: Dictionary = {}
 var animation_time := 0.0
 var animation_index := 0
-var animation_duration := 0.12
+var animation_ate := false
+var animation_eat_fired := false
+var animation_fall_started := false
+var animation_continuous := false
 var status_time := 0.0
 var fail_reason := ""
+var terminal_delay := 0.0
 
 func _ready() -> void:
 	qa_mode = qa_mode or OS.get_cmdline_user_args().has("--qa")
@@ -143,7 +149,7 @@ func _clear(node: Node) -> void:
 func _reset_input() -> void:
 	held = Vector2i.ZERO
 	pending_turn = false
-	repeat_clock = 0.35
+	repeat_clock = MOVE_SECONDS
 	repeat_blocked = false
 	if is_instance_valid(stick):
 		stick.reset()
@@ -153,6 +159,8 @@ func _close_overlay() -> void:
 	paused = false
 	if is_instance_valid(stick):
 		stick.enabled = mode == "play" and state.get("status", "") == "playing"
+	if is_instance_valid(board):
+		board.set_process(true)
 	_reset_input()
 
 func _show_home() -> void:
@@ -342,7 +350,7 @@ func _update_hud() -> void:
 
 func _on_direction(d: Vector2i) -> void:
 	held = d
-	repeat_clock = 0.35
+	repeat_clock = MOVE_SECONDS
 	repeat_blocked = false
 	pending_turn = false
 	if d == Vector2i.ZERO:
@@ -358,6 +366,8 @@ func try_move(d: Vector2i) -> bool:
 	var result: Dictionary = Rules.step(levels[level_index], state, d)
 	if not result.valid:
 		repeat_blocked = true
+		board.react("blocked", d)
+		audio.play("blocked")
 		hint_label.text = "转个方向试试，不能直接掉头。" if result.reason == "reverse" else "这里被挡住啦，换条路试试。"
 		status_time = 1.2
 		return false
@@ -368,54 +378,102 @@ func try_move(d: Vector2i) -> bool:
 	animation_frames = result.frames
 	animation_index = 0
 	animation_time = 0.0
+	animation_ate = result.ate
+	animation_eat_fired = false
+	animation_fall_started = false
+	animation_continuous = held != Vector2i.ZERO
+	repeat_clock = MOVE_SECONDS
 	busy = true
-	audio.play("eat" if result.ate else "move")
+	board.motion_active = true
+	board.facing_direction = d
+	board.react("move", d)
+	audio.play("move")
 	_update_hud()
 	if skip_animations:
+		if animation_ate:
+			board.react("eat", d)
 		_finish_animation()
 	return true
 
 func _process(delta: float) -> void:
 	if mode != "play" or paused:
 		return
+	if terminal_delay > 0:
+		terminal_delay -= delta
+		if terminal_delay <= 0:
+			_end_panel(state.status == "won")
+		return
 	if status_time > 0:
 		status_time -= delta
 		if status_time <= 0 and state.status == "playing":
 			hint_label.text = levels[level_index].hint
+	# Repeat time is measured from the accepted input, including its animation.
+	# Never replay missed ticks after a stall or a long gravity round.
+	if held != Vector2i.ZERO:
+		repeat_clock -= delta
 	if busy:
 		animation_time += delta
-		var duration := 0.13 if animation_index == 0 else 0.075
-		var t := clampf(animation_time / duration, 0.0, 1.0)
-		var current: Dictionary = animation_frames[animation_index]
-		var positions: Array = []
-		for i in current.body.size():
-			var from: Vector2 = Vector2(animation_from.body[mini(i, animation_from.body.size()-1)])
-			positions.append(from.lerp(Vector2(current.body[i]), smoothstep(0.0, 1.0, t)))
-		board.body_override = positions
-		board.set_data(levels[level_index], current)
-		if t >= 1.0:
-			animation_from = current
-			animation_index += 1
-			animation_time = 0.0
-			if animation_index >= animation_frames.size():
-				_finish_animation()
-		return
+		_advance_animation()
+		if busy:
+			return
 	if state.get("status", "") == "playing" and held != Vector2i.ZERO and not repeat_blocked:
 		if pending_turn:
 			pending_turn = false
 			try_move(held)
-			repeat_clock = 0.35
-		else:
-			repeat_clock -= delta
-			if repeat_clock <= 0:
-				try_move(held)
-				repeat_clock = 0.18
+		elif repeat_clock <= 0:
+			try_move(held)
+
+func _advance_animation() -> void:
+	var moved: Dictionary = animation_frames[0]
+	var fall_rows := animation_frames.size() - 1
+	var fall_seconds := sqrt(2.0 * fall_rows / FALL_ACCELERATION)
+	var positions: Array = []
+	if animation_time < MOVE_SECONDS:
+		var t := clampf(animation_time / MOVE_SECONDS, 0.0, 1.0)
+		# Held input has constant speed across cell boundaries. Programmatic
+		# single steps use a short ease-out; releases never cancel an accepted step.
+		var blend := t if animation_continuous else 1.0 - pow(1.0 - t, 2.0)
+		for i in moved.body.size():
+			var from := Vector2(animation_from.body[mini(i, animation_from.body.size()-1)])
+			positions.append(from.lerp(Vector2(moved.body[i]), blend))
+		board.set_data(levels[level_index], moved if t >= 0.75 else animation_from)
+		if animation_ate and t >= 0.75 and not animation_eat_fired:
+			animation_eat_fired = true
+			board.react("eat", board.facing_direction)
+			audio.play("eat")
+	else:
+		if animation_ate and not animation_eat_fired:
+			animation_eat_fired = true
+			board.react("eat", board.facing_direction)
+			audio.play("eat")
+		if fall_rows > 0:
+			if not animation_fall_started:
+				animation_fall_started = true
+				board.react("fall")
+			var elapsed := minf(animation_time - MOVE_SECONDS, fall_seconds)
+			var drop := minf(fall_rows, 0.5 * FALL_ACCELERATION * elapsed * elapsed)
+			animation_index = mini(int(drop), fall_rows)
+			for part in moved.body:
+				positions.append(Vector2(part) + Vector2(0, drop))
+			board.set_data(levels[level_index], animation_frames[animation_index])
+		if animation_time >= MOVE_SECONDS + fall_seconds:
+			if fall_rows > 0 and state.status != "lost":
+				board.body_override = []
+				board.set_data(levels[level_index], state)
+				board.react("land")
+				audio.play("land")
+			_finish_animation()
+			return
+	board.body_override = positions
+	board.queue_redraw()
 
 func _cancel_animation() -> void:
 	busy = false
+	terminal_delay = 0.0
 	animation_frames.clear()
 	if is_instance_valid(board):
 		board.body_override = []
+		board.motion_active = false
 
 func _finish_animation() -> void:
 	_cancel_animation()
@@ -428,15 +486,19 @@ func _finish_animation() -> void:
 		_reset_input()
 		stick.enabled = false
 		if state.status == "won":
+			board.react("won")
 			if not progress.completed.has(level_index):
 				progress.completed.append(level_index)
 				progress.completed.sort()
 			save_failed = not Progress.save_data(save_path, progress)
 			audio.play("won")
-			_end_panel(true)
+			if skip_animations: _end_panel(true)
+			else: terminal_delay = 0.42
 		else:
+			board.react("lost")
 			audio.play("lost")
-			_end_panel(false)
+			if skip_animations: _end_panel(false)
+			else: terminal_delay = 0.42
 
 func undo() -> void:
 	if history.is_empty() or mode != "play":
@@ -445,6 +507,7 @@ func undo() -> void:
 	_close_overlay()
 	state = history.pop_back().duplicate(true)
 	board.mood = "normal"
+	board.clear_reactions()
 	board.set_data(levels[level_index], state)
 	stick.enabled = true
 	_reset_input()
@@ -510,6 +573,7 @@ func pause_game() -> void:
 	if state.status != "playing":
 		return
 	paused = true
+	board.set_process(false)
 	var panel := _panel("歇一小口", "棋盘会等你，慢慢想。", 334)
 	var resume := _button(panel, "继续游戏", _close_overlay, CORAL, 21)
 	resume.name = "Resume"
