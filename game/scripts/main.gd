@@ -10,6 +10,7 @@ const UiSkin = preload("res://scripts/ui_skin.gd")
 const MEADOW = preload("res://assets/art-v2/meadow.png")
 const HOME_MONSTER = preload("res://assets/art-v2/home-monster.png")
 const UNDO_ICON = preload("res://assets/ui-v5/undo.svg")
+const FOOD_ATLAS = preload("res://assets/art-v2/gameplay-atlas.png")
 const INK := Color("4d2543")
 const CORAL := Color("f87961")
 const CREAM := Color("fff3da")
@@ -37,7 +38,6 @@ var stick: Control
 var audio: Node
 var counter: Label
 var step_label: Label
-var hint_label: Label
 var undo_button: Button
 var font: Font
 var held := Vector2i.ZERO
@@ -55,14 +55,12 @@ var animation_food_cursor := 0
 var animation_food_prepared := false
 var animation_fall_started := false
 var animation_continuous := false
-var status_time := 0.0
 var fail_reason := ""
 var terminal_delay := 0.0
 var layout_top := 24.0
 var layout_bottom := 20.0
 var language := "zh_CN"
 var overlay_kind := ""
-var status_hint_key := ""
 
 func _ready() -> void:
 	qa_mode = qa_mode or OS.get_cmdline_user_args().has("--qa")
@@ -149,7 +147,16 @@ func _rect(node: Control, x: float, y: float, w: float, h: float) -> void:
 	node.position = Vector2(x, y)
 	node.size = Vector2(w, h)
 
-func _undo_icon(button: Button) -> void:
+func _undo_icon(button: Button, centered_text: bool = false) -> void:
+	if centered_text:
+		# The glyph stays at the left; the label has the same center as Restart.
+		button.draw.connect(func():
+			var key := "disabled" if button.disabled else ("pressed" if button.is_pressed() else "normal")
+			var skin := button.get_theme_stylebox(key)
+			var center_y := (button.size.y + skin.get_content_margin(SIDE_TOP) - skin.get_content_margin(SIDE_BOTTOM)) * 0.5
+			button.draw_texture_rect(UNDO_ICON, Rect2(12, center_y-10, 20, 20), false, Color("a99b92") if button.disabled else Color.WHITE)
+		)
+		return
 	button.icon = UNDO_ICON
 	button.expand_icon = true
 	button.add_theme_constant_override("icon_max_width", 20)
@@ -186,11 +193,6 @@ func _level_title(index: int) -> String:
 		return String(levels[index].title) # Isolated QA levels are not shipped chapter text.
 	return Localization.level_title(int(levels[index].id), language)
 
-func _level_hint(index: int) -> String:
-	if int(levels[index].id) < 1 or int(levels[index].id) > 12:
-		return String(levels[index].hint)
-	return Localization.level_hint(int(levels[index].id), language)
-
 func _clear(node: Node) -> void:
 	for child in node.get_children():
 		node.remove_child(child)
@@ -222,8 +224,6 @@ func _show_home() -> void:
 	mode = "home"
 	board = null
 	stick = null
-	var caption := _label(content, _t("home.caption"), 13, INK, true)
-	caption.name = "Caption"
 	var title := _label(content, _t("home.title"), 61, INK, true)
 	title.add_theme_color_override("font_outline_color", Color("fff1ce"))
 	title.add_theme_constant_override("outline_size", 8)
@@ -241,20 +241,12 @@ func _show_home() -> void:
 	hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.name = "Hero"
 	content.add_child(hero)
-	var line := _label(content, _t("home.description"), 18, INK, true)
-	line.add_theme_color_override("font_outline_color", Color("fff3da"))
-	line.add_theme_constant_override("outline_size", 5)
-	line.name = "Tagline"
 	var start := _button(content, _t("home.start" if progress.completed.is_empty() else "home.continue"), start_level.bind(_next_level()), CORAL, 22)
 	start.name = "Start"
 	var select := _button(content, _t("home.levels"), show_levels, CREAM)
 	select.name = "Select"
 	var settings := _button(content, _t("home.settings"), _settings, MINT, 16)
 	settings.name = "Settings"
-	var foot := _label(content, _t("home.footer"), 13, INK, true)
-	foot.add_theme_color_override("font_outline_color", CREAM)
-	foot.add_theme_constant_override("outline_size", 4)
-	foot.name = "Footer"
 	_layout()
 
 func _next_level() -> int:
@@ -307,8 +299,6 @@ func start_level(index: int) -> void:
 	state = Rules.initial_state(levels[index])
 	history.clear()
 	fail_reason = ""
-	status_hint_key = ""
-	status_time = 0.0
 	var tag := _label(content, _t("hud.chapter", [index + 1]), 12, Color("8b5769"))
 	tag.name = "Tag"
 	var title := _label(content, _level_title(index), 25)
@@ -318,8 +308,19 @@ func start_level(index: int) -> void:
 	var pause := _button(content, "Ⅱ", pause_game, CREAM, 24)
 	pause.name = "Pause"
 	pause.tooltip_text = _t("hud.pause")
-	counter = _label(content, "", 19, INK, true)
+	counter = _label(content, "", 18, INK)
 	counter.name = "Counter"
+	var food_texture := AtlasTexture.new()
+	food_texture.atlas = FOOD_ATLAS
+	food_texture.region = Board.SPRITE_RECTS[2]
+	food_texture.filter_clip = true
+	var food_icon := TextureRect.new()
+	food_icon.name = "FoodIcon"
+	food_icon.texture = food_texture
+	food_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	food_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	food_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	content.add_child(food_icon)
 	step_label = _label(content, "", 14, Color("93707b"), true)
 	step_label.name = "Moves"
 	board = Board.new()
@@ -327,21 +328,16 @@ func start_level(index: int) -> void:
 	board.clip_contents = true
 	content.add_child(board)
 	board.set_data(levels[index], state)
-	hint_label = _label(content, _level_hint(index), 16, INK, true)
-	hint_label.name = "Hint"
-	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stick = Stick.new()
 	stick.name = "Stick"
 	content.add_child(stick)
 	stick.direction_changed.connect(_on_direction)
 	_localize_direction_keys()
 	undo_button = _button(content, _t("controls.undo"), undo, CREAM, 18)
-	_undo_icon(undo_button)
+	_undo_icon(undo_button, true)
 	undo_button.name = "Undo"
-	var restart := _button(content, _t("controls.restart"), restart_level, Color("e6eddc"), 16)
+	var restart := _button(content, _t("controls.restart"), restart_level, Color("e6eddc"), 18)
 	restart.name = "Restart"
-	var tip := _label(content, _t("controls.tip"), 12, Color("7e5565"), true)
-	tip.name = "ControlTip"
 	_update_hud()
 	_layout()
 
@@ -362,15 +358,12 @@ func _layout() -> void:
 	layout_top = top
 	layout_bottom = bottom
 	if mode == "home":
-		_rect(content.get_node("Caption"), 20, top+20, w-40, 27)
 		_rect(content.get_node("Title"), 20, top+56, w-40, 86)
 		_rect(content.get_node("Subtitle"), 20, top+136, w-40, 39)
 		_rect(content.get_node("Hero"), 18, top+184, w-36, maxf(168, h-top-bottom-434))
-		_rect(content.get_node("Tagline"), 20, h-bottom-248, w-40, 42)
 		_rect(content.get_node("Start"), 57, h-bottom-194, w-114, 68)
 		_rect(content.get_node("Select"), 57, h-bottom-110, (w-130)*0.65, 55)
 		_rect(content.get_node("Settings"), 73+(w-130)*0.65, h-bottom-110, (w-130)*0.35, 55)
-		_rect(content.get_node("Footer"), 20, h-bottom-25, w-40, 25)
 	elif mode == "select":
 		_rect(content.get_node("Back"), 22, top, 52, 48)
 		_rect(content.get_node("Title"), 84, top+4, w-168, 42)
@@ -382,34 +375,43 @@ func _layout() -> void:
 		_rect(content.get_node("Footer"), 12, h-bottom-54, w-24, 40)
 	elif mode == "play" and is_instance_valid(board):
 		_rect(content.get_node("Tag"), 33, top-2, w-118, 18)
-		_rect(content.get_node("Title"), 33, top+18, w-124, 32)
+		_layout_play_title()
 		_rect(content.get_node("Pause"), w-79, top+4, 49, 49)
-		_rect(counter, 35, top+56, w*0.64-12, 25)
 		_rect(step_label, w*0.73, top+56, w*0.19, 25)
 		step_label.add_theme_color_override("font_color", INK)
-		_rect(board, 12, top+117, w-24, maxf(160, h-top-bottom-361))
-		_rect(hint_label, 31, h-bottom-240, w-62, 32)
+		_rect(board, 12, top+117, w-24, maxf(160, h-top-bottom-327))
 		var control_w := minf(180.0, (w-66.0)*0.5)
-		var action_w := minf(202.0, (w-80.0)*0.5)
+		var action_w := minf(180.0, (w-88.0)*0.5)
 		var stick_x := 25.0 if not progress.left_handed else w-25-control_w
 		var actions_x := w-28-action_w if not progress.left_handed else 28.0
 		_rect(stick, stick_x, h-bottom-188, control_w, 180)
-		_rect(undo_button, actions_x, h-bottom-160, action_w, 63)
-		_rect(content.get_node("Restart"), actions_x, h-bottom-80, action_w, 54)
-		_rect(content.get_node("ControlTip"), actions_x, h-bottom-185, action_w, 22)
+		_rect(undo_button, actions_x, h-bottom-166, action_w, 56)
+		_rect(content.get_node("Restart"), actions_x, h-bottom-86, action_w, 56)
 	if overlay.get_child_count() > 0:
 		var panel: Control = overlay.get_node_or_null("Panel")
 		if panel:
 			panel.position = Vector2((w-panel.size.x)*0.5, maxf(top+10, (h-panel.size.y)*0.5))
+
+func _layout_play_title() -> void:
+	if mode != "play" or not is_instance_valid(counter):
+		return
+	var title: Label = content.get_node("Title")
+	var count_width := maxf(34, font.get_string_size(counter.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x)
+	var title_width := maxf(24, size.x-124-count_width-44)
+	_rect(title, 33, layout_top+18, title_width, 36)
+	# Keep the count directly after the rendered title, including narrow English screens.
+	var measured := font.get_string_size(title.text, HORIZONTAL_ALIGNMENT_LEFT, -1, title.get_theme_font_size("font_size")).x
+	title.size.x = ceilf(minf(title_width, measured))
+	_rect(counter, title.position.x+title.size.x+12, layout_top+18, count_width, 36)
+	_rect(content.get_node("FoodIcon"), counter.position.x+count_width+8, layout_top+24, 24, 24)
 
 func _update_hud(visible_state: Dictionary = {}) -> void:
 	if not is_instance_valid(counter) or mode != "play":
 		return
 	var total: int = levels[level_index].fruit.size()
 	var shown := state if visible_state.is_empty() else visible_state
-	counter.text = _t("hud.food_open" if shown.fruit.is_empty() else "hud.food", [total-shown.fruit.size(), total])
-	counter.set_meta("base_font_size", 14 if shown.fruit.is_empty() else 16)
-	_fit_text(counter, counter.size.x, counter.size.y)
+	counter.text = "%d/%d" % [total-shown.fruit.size(), total]
+	_layout_play_title()
 	step_label.text = _t("hud.moves", [state.moves])
 	_fit_text(step_label, step_label.size.x, step_label.size.y)
 	undo_button.disabled = history.is_empty()
@@ -434,10 +436,6 @@ func try_move(d: Vector2i) -> bool:
 		repeat_blocked = true
 		board.react("blocked", d)
 		audio.play("blocked")
-		status_hint_key = "hint.reverse" if result.reason == "reverse" else "hint.blocked"
-		hint_label.text = _t(status_hint_key)
-		_fit_text(hint_label, hint_label.size.x, hint_label.size.y)
-		status_time = 1.2
 		return false
 	history.append(state.duplicate(true))
 	animation_from = state.duplicate(true)
@@ -477,12 +475,6 @@ func _process(delta: float) -> void:
 		if terminal_delay <= 0:
 			_end_panel(state.status == "won")
 		return
-	if status_time > 0:
-		status_time -= delta
-		if status_time <= 0 and state.status == "playing":
-			status_hint_key = ""
-			hint_label.text = _level_hint(level_index)
-			_fit_text(hint_label, hint_label.size.x, hint_label.size.y)
 	# Repeat time is measured from the accepted input, including its animation.
 	# Never replay missed ticks after a stall or a long gravity round.
 	if held != Vector2i.ZERO:
@@ -620,10 +612,6 @@ func undo() -> void:
 	board.set_data(levels[level_index], state)
 	stick.enabled = true
 	_reset_input()
-	status_hint_key = "hint.undo"
-	hint_label.text = _t(status_hint_key)
-	_fit_text(hint_label, hint_label.size.x, hint_label.size.y)
-	status_time = 1.2
 	_update_hud()
 	audio.play("undo")
 
@@ -648,10 +636,11 @@ func _panel(title: String, subtitle: String, height: float = 322) -> Panel:
 	var heading := _label(panel, title, 29, INK, true)
 	heading.name = "Heading"
 	_rect(heading, 12, 22, panel.size.x-24, 49)
-	var sub := _label(panel, subtitle, 16, Color("8c6677"), true)
-	sub.name = "Description"
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_rect(sub, 22, 79, panel.size.x-44, 65)
+	if not subtitle.is_empty():
+		var sub := _label(panel, subtitle, 16, Color("8c6677"), true)
+		sub.name = "Description"
+		sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_rect(sub, 22, 79, panel.size.x-44, 65)
 	_layout()
 	return panel
 
@@ -693,15 +682,15 @@ func pause_game() -> void:
 	_show_pause_panel()
 
 func _show_pause_panel() -> void:
-	var panel := _panel(_t("pause.title"), _t("pause.description"), 334)
+	var panel := _panel(_t("pause.title"), "", 248)
 	overlay_kind = "pause"
 	var resume := _button(panel, _t("pause.resume"), _close_overlay, CORAL, 21)
 	resume.name = "Resume"
-	_rect(resume, 26, 150, panel.size.x-52, 58)
+	_rect(resume, 26, 94, panel.size.x-52, 58)
 	var restart := _button(panel, _t("end.restart"), restart_level, CREAM)
-	_rect(restart, 26, 225, (panel.size.x-68)*0.6, 49)
+	_rect(restart, 26, 170, (panel.size.x-68)*0.6, 49)
 	var levels_b := _button(panel, _t("end.levels"), show_levels, MINT)
-	_rect(levels_b, 42+(panel.size.x-68)*0.6, 225, (panel.size.x-68)*0.4, 49)
+	_rect(levels_b, 42+(panel.size.x-68)*0.6, 170, (panel.size.x-68)*0.4, 49)
 
 func _settings() -> void:
 	var panel := _panel(_t("settings.title"), _t("settings.description"), 437)
@@ -760,7 +749,7 @@ func _refresh_texts() -> void:
 	if not is_instance_valid(content):
 		return
 	if mode == "home":
-		var home_keys := {"Caption":"home.caption", "Title":"home.title", "Subtitle":"home.subtitle", "Tagline":"home.description", "Start":"home.start" if progress.completed.is_empty() else "home.continue", "Select":"home.levels", "Settings":"home.settings", "Footer":"home.footer"}
+		var home_keys := {"Title":"home.title", "Subtitle":"home.subtitle", "Start":"home.start" if progress.completed.is_empty() else "home.continue", "Select":"home.levels", "Settings":"home.settings"}
 		for name_key in home_keys:
 			content.get_node(name_key).text = _t(home_keys[name_key])
 	elif mode == "select":
@@ -776,8 +765,6 @@ func _refresh_texts() -> void:
 		content.get_node("Pause").tooltip_text = _t("hud.pause")
 		undo_button.text = _t("controls.undo")
 		content.get_node("Restart").text = _t("controls.restart")
-		content.get_node("ControlTip").text = _t("controls.tip")
-		hint_label.text = _t(status_hint_key) if status_time > 0 and not status_hint_key.is_empty() else _level_hint(level_index)
 		_localize_direction_keys()
 		_update_hud(board.state if busy else {})
 	_layout()
@@ -844,6 +831,4 @@ func _draw() -> void:
 	if mode == "play" or mode == "select":
 		draw_style_box(UiSkin.panel("cream"), Rect2(15, layout_top-10, size.x-30, 119 if mode == "play" else 123))
 	if mode == "play":
-		draw_style_box(UiSkin.panel("badge"), Rect2(26, layout_top+55, size.x*0.64, 30))
 		draw_style_box(UiSkin.panel("cream"), Rect2(12, size.y-layout_bottom-200, size.x-24, 214))
-		draw_style_box(UiSkin.panel("badge"), Rect2(22, size.y-layout_bottom-242, size.x-44, 44))

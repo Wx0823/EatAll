@@ -170,6 +170,49 @@ func run() -> void:
 		check(game.get_global_rect().encloses(stick_rect) and game.get_global_rect().encloses(undo_rect), "short-screen controls stay within root hand=" + str(right_side))
 		check(not game.board.get_global_rect().intersects(stick_rect), "short-screen board avoids thumb zone hand=" + str(right_side))
 
+	# Compact UI requirements: actual geometry and event-driven counts, not skin margin constants.
+	game._show_home()
+	for retired in ["Caption","Tagline","Footer"]:
+		check(game.content.get_node_or_null(retired)==null,"Home retired text removed: "+retired)
+	game.start_level(11)
+	game.set_process(false)
+	game.skip_animations=false
+	check(game.counter.text=="0/3","Compact counter starts with numbers only")
+	check(game.content.get_node_or_null("Hint")==null and game.content.get_node_or_null("ControlTip")==null,"Retired gameplay text absent")
+	var icon:TextureRect=game.content.get_node("FoodIcon")
+	check(icon.texture!=null,"Food count retains actual food texture")
+	for handed in [false,true]:
+		game.progress.left_handed=handed
+		game._layout()
+		var undo_rect:Rect2=game.undo_button.get_global_rect()
+		var restart_rect:Rect2=game.content.get_node("Restart").get_global_rect()
+		check(undo_rect.size.is_equal_approx(restart_rect.size),"Undo and restart equal width and height")
+		check(is_equal_approx(undo_rect.get_center().x,restart_rect.get_center().x),"Undo and restart aligned vertically")
+		var title_rect:Rect2=game.content.get_node("Title").get_global_rect()
+		var counter_rect:Rect2=game.counter.get_global_rect()
+		check(not title_rect.intersects(counter_rect) and not counter_rect.intersects(icon.get_global_rect()),"Title count and food icon do not overlap")
+		check(absf(title_rect.get_center().y-counter_rect.get_center().y)<3 and absf(counter_rect.get_center().y-icon.get_global_rect().get_center().y)<3,"Title count and icon share a row")
+	for d in [Vector2i.RIGHT,Vector2i.RIGHT,Vector2i.DOWN,Vector2i.RIGHT]:
+		game.try_move(d)
+		game._process(0.8)
+	check(game.counter.text=="1/3","Actual RRDR setup has one treat")
+	game.try_move(Vector2i.RIGHT)
+	var contact:=0.0
+	for event in game.animation_food_events:
+		if event.cell==Vector2i(6,6):contact=0.16+sqrt(2.0*event.frame/160.0)
+	check(contact>0,"Real fifth move schedules falling food contact")
+	game._process(contact-0.02)
+	check(game.counter.text=="1/3","Counter waits for actual falling contact")
+	game._process(0.03)
+	check(game.counter.text=="2/3","Counter changes at actual falling contact")
+	game._process(0.8)
+	game.undo()
+	check(game.counter.text=="1/3" and game.state.moves==4,"Undo restores count and complete move")
+	game.pause_game()
+	check(game.overlay.get_node_or_null("Panel/Description")==null,"Pause explanatory description removed")
+	game._close_overlay()
+	game.set_process(true)
+
 	# Save module failure/recovery checks use a separate QA file only.
 	var data: Dictionary = Progress.defaults()
 	data.completed = [0]

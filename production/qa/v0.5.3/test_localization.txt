@@ -1,0 +1,3 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+LOCALIZATION_QA checks=1465 failures=0

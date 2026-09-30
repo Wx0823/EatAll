@@ -115,7 +115,7 @@ func verify_runtime()->void:
 		check(app.content.get_node("Level0").tooltip_text==Loc.level_title(1,locale),"Localized level tooltip")
 		app.start_level(11)
 		check(app.content.get_node("Title").text==Loc.level_title(12,locale),"Localized actual level title")
-		check(app.hint_label.text==Loc.level_hint(12,locale),"Localized actual hint")
+		check(app.content.get_node_or_null("Hint")==null and app.content.get_node_or_null("ControlTip")==null,"Retired level hint and control tip stay absent")
 		app.skip_animations=true
 		app.try_move(Vector2i.RIGHT)
 		check(app.step_label.text==Loc.text("hud.moves",locale,[1]),"Dynamic move counter")
