@@ -13,7 +13,39 @@ var facing_direction: Vector2i = Vector2i.ZERO
 var _reaction_time: Dictionary = {}
 var _particles: Array[Dictionary] = []
 var _motion_clock: float = 0.0
-var _frame_meshes: Array[ArrayMesh] = []
+var _native_sweep := PackedVector2Array()
+var _native_tip := Vector2.ZERO
+var _freckle_stamps: Array[AtlasTexture] = []
+var _stamp_viewport: SubViewport
+var _stamp_output: SubViewport
+var mouth_animation: String = "idle"
+var mouth_openness: float = 0.0
+var _mouth_age: float = 0.0
+var _mouth_start_openness: float = 0.0
+var _food_source_grid: Vector2 = Vector2.INF
+var _mouth_frames: Array[AtlasTexture] = []
+var _head_heading: float = 0.0
+var _face_flip: bool = false
+var _mouth_world: Vector2 = Vector2.ZERO
+var draw_calls_total: int = 0
+var draw_time_us: int = 0
+var draw_sections_us: Dictionary = {}
+var static_draw_sections_us: Dictionary = {}
+var static_draw_calls_total: int = 0
+var static_draw_time_us: int = 0
+var _static_painter: Node2D
+var _static_dirty: bool = true
+var _static_cell: float = -1.0
+var _static_origin: Vector2 = Vector2.INF
+var _static_exit_open: bool = false
+var _body_ribbon: ArrayMesh = ArrayMesh.new()
+var _ribbon_path := PackedVector2Array()
+var _ribbon_cell: float = -1.0
+var _ribbon_eat: float = -1.0
+var _grid_mesh: ArrayMesh = ArrayMesh.new()
+var _grid_key: Array = []
+static var _dot_texture: GradientTexture2D
+static var _shared_freckles: Texture2D
 const REACTION_LENGTH := {"move":0.16, "eat":0.72, "fall":0.65, "land":0.34, "blocked":0.24, "lost":0.65, "won":1.05}
 const ATLAS_PATH := "res://assets/art-v2/gameplay-atlas.png"
 const SURPRISED_PATH := "res://assets/art-v2/head-surprised.png"
@@ -26,6 +58,8 @@ const SPRITE_RECTS := [
 ]
 
 func set_data(new_level: Dictionary, new_state: Dictionary) -> void:
+	if level != new_level:
+		_static_dirty = true
 	level = new_level
 	state = new_state
 	queue_redraw()
@@ -36,10 +70,26 @@ func react(kind: String, direction: Vector2i = Vector2i.ZERO) -> void:
 	_reaction_time[kind] = 0.0
 	if direction != Vector2i.ZERO:
 		facing_direction = direction
+	if kind == "eat":
+		mouth_animation = "swallow"
+		_mouth_age = 0.0
+		mouth_openness = 1.0
 	if kind == "land" or kind == "lost" or kind == "won":
 		_reaction_time.erase("fall")
 	if kind in ["eat", "land", "won", "lost"]:
 		_emit_particles(kind)
+	queue_redraw()
+
+func anticipate_food(direction: Vector2i, food_cell: Vector2 = Vector2.INF) -> void:
+	facing_direction = direction
+	_food_source_grid = food_cell
+	if not _food_source_grid.is_finite():
+		var body: Array = body_override if not body_override.is_empty() else state.get("body", [])
+		if not body.is_empty():
+			_food_source_grid = Vector2(body[0]) + Vector2(direction)
+	_mouth_start_openness = mouth_openness
+	_mouth_age = 0.0
+	mouth_animation = "opening"
 	queue_redraw()
 
 func clear_reactions() -> void:
@@ -48,10 +98,17 @@ func clear_reactions() -> void:
 	_motion_clock = 0.0
 	motion_active = false
 	facing_direction = Vector2i.ZERO
+	mouth_animation = "idle"
+	mouth_openness = 0.0
+	_mouth_age = 0.0
+	_food_source_grid = Vector2.INF
+	_face_flip = false
+	_head_heading = 0.0
 	queue_redraw()
 
 func _process(delta: float) -> void:
-	var changed := motion_active or not _reaction_time.is_empty() or not _particles.is_empty()
+	var changed := motion_active or not _reaction_time.is_empty() or not _particles.is_empty() or mouth_animation != "idle"
+	_update_mouth(delta)
 	if motion_active:
 		_motion_clock += delta
 	for kind in _reaction_time.keys():
@@ -64,6 +121,32 @@ func _process(delta: float) -> void:
 			_particles.remove_at(index)
 	if changed:
 		queue_redraw()
+
+func _update_mouth(delta: float) -> void:
+	if mouth_animation == "idle":
+		return
+	_mouth_age += delta
+	if mouth_animation == "opening":
+		mouth_openness = lerpf(_mouth_start_openness, 1.0, smoothstep(0.0, 0.10, _mouth_age))
+		if _mouth_age >= 0.10:
+			mouth_animation = "holding"
+	elif mouth_animation == "holding":
+		mouth_openness = 1.0
+		# A cancelled integration must never leave the character stuck open.
+		if _mouth_age > 0.45:
+			mouth_animation = "idle"
+			mouth_openness = 0.0
+	elif mouth_animation == "swallow":
+		mouth_openness = 1.0 - smoothstep(0.075, 0.175, _mouth_age)
+		if _mouth_age >= 0.175:
+			mouth_animation = "chew"
+			_mouth_age = 0.0
+	elif mouth_animation == "chew":
+		mouth_openness = absf(sin(_mouth_age / 0.22 * TAU)) * 0.28 * (1.0 - clampf(_mouth_age / 0.22, 0.0, 1.0))
+		if _mouth_age >= 0.22:
+			mouth_animation = "idle"
+			mouth_openness = 0.0
+			_food_source_grid = Vector2.INF
 
 func _reaction(kind: String) -> float:
 	if not _reaction_time.has(kind):
@@ -114,13 +197,105 @@ func _draw_particles() -> void:
 				star.append(p + Vector2(cos(angle), sin(angle)) * radius * (1.0 if tip % 2 == 0 else 0.35))
 			draw_colored_polygon(star, color)
 		else:
-			_circle(p, cell * 0.027, color)
+			var extent := Vector2.ONE * cell * 0.054
+			draw_texture_rect(_dot_texture,Rect2(p-extent*0.5,extent),false,color)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	resized.connect(queue_redraw)
 	_load_sprites()
+	if _dot_texture == null:
+		var gradient := Gradient.new()
+		gradient.offsets = PackedFloat32Array([0.0,0.68,1.0])
+		gradient.colors = PackedColorArray([Color.WHITE,Color.WHITE,Color(1,1,1,0)])
+		_dot_texture = GradientTexture2D.new()
+		_dot_texture.width = 16
+		_dot_texture.height = 16
+		_dot_texture.fill = GradientTexture2D.FILL_RADIAL
+		_dot_texture.fill_from = Vector2(0.5,0.5)
+		_dot_texture.fill_to = Vector2(1.0,0.5)
+		_dot_texture.gradient = gradient
+	_make_freckle_stamps()
+	_static_painter = Node2D.new()
+	_static_painter.show_behind_parent = true
+	add_child(_static_painter)
+	_static_painter.draw.connect(_paint_static)
+
+func _make_freckle_stamps() -> void:
+	if _shared_freckles != null:
+		_bind_freckle_stamps(_shared_freckles)
+		return
+	_stamp_viewport = SubViewport.new()
+	_stamp_viewport.size = Vector2i(1024, 256)
+	_stamp_viewport.transparent_bg = true
+	_stamp_viewport.disable_3d = true
+	_stamp_viewport.gui_disable_input = true
+	_stamp_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(_stamp_viewport)
+	var painter := Node2D.new()
+	_stamp_viewport.add_child(painter)
+	painter.draw.connect(func(): _paint_freckle_sheet(painter))
+	# Viewport targets contain premultiplied alpha. Convert once on the GPU so
+	# ordinary texture draws do not multiply soft freckles a second time.
+	_stamp_output = SubViewport.new()
+	_stamp_output.size = _stamp_viewport.size
+	_stamp_output.transparent_bg = true
+	_stamp_output.disable_3d = true
+	_stamp_output.render_target_update_mode = SubViewport.UPDATE_ONCE
+	add_child(_stamp_output)
+	var copy := Sprite2D.new()
+	copy.centered = false
+	copy.texture = _stamp_viewport.get_texture()
+	var shader := Shader.new()
+	shader.code = "shader_type canvas_item; render_mode blend_disabled; void fragment(){vec4 c=texture(TEXTURE,UV); COLOR=vec4(c.rgb/max(c.a,0.001),c.a);}"
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	copy.material = material
+	_stamp_output.add_child(copy)
+	_bind_freckle_stamps(_stamp_output.get_texture())
+	_finish_freckle_bake()
+
+func _bind_freckle_stamps(texture: Texture2D) -> void:
+	_freckle_stamps.clear()
+	for index in range(16):
+		var stamp := AtlasTexture.new()
+		stamp.atlas = texture
+		stamp.region = Rect2((index % 8) * 128, (index / 8) * 128, 128, 128)
+		stamp.filter_clip = true
+		_freckle_stamps.append(stamp)
+
+func _finish_freckle_bake() -> void:
+	await RenderingServer.frame_post_draw
+	await RenderingServer.frame_post_draw
+	if not is_inside_tree():
+		return
+	# One first-entry readback; subsequent levels reuse the finished texture.
+	var baked := _stamp_output.get_texture().get_image()
+	_shared_freckles = ImageTexture.create_from_image(baked)
+	_bind_freckle_stamps(_shared_freckles)
+	_stamp_output.queue_free()
+	_stamp_viewport.queue_free()
+	queue_redraw()
+
+func _paint_freckle_sheet(painter: Node2D) -> void:
+	for index in range(16):
+		var f := float(index + 1)
+		var p := Vector2((index % 8) * 128 + 64, (index / 8) * 128 + 64)
+		_stamp_oval(painter, p + Vector2(-0.075 + sin(f * 2.1) * 0.045, -0.10) * 128, Vector2(0.065, 0.032) * 128, Color("ee805f"), -0.42 + sin(f) * 0.35)
+		_stamp_oval(painter, p + Vector2(0.10, -0.045) * 128, Vector2(0.036, 0.061) * 128, Color("ed805f"), 0.25)
+		_stamp_oval(painter, p + Vector2(0.06, 0.21) * 128, Vector2(0.041, 0.025) * 128, Color("f49b76"), -0.15)
+		for fleck in range(9):
+			var seed_value := f * 13.7 + float(fleck) * 5.17
+			var center := p + Vector2(sin(seed_value) * 0.22, -0.10 + cos(seed_value * 1.31) * 0.13) * 128
+			var radius := Vector2(0.023 + absf(sin(seed_value * 0.7)) * 0.033, 0.014 + absf(cos(seed_value)) * 0.020) * 128
+			_stamp_oval(painter, center, radius, Color(1.0, 0.75, 0.50, 0.28), seed_value)
+
+func _stamp_oval(painter: Node2D, p: Vector2, dimensions: Vector2, color: Color, rotation: float) -> void:
+	var radius := minf(dimensions.x, dimensions.y)
+	painter.draw_set_transform(p, rotation, dimensions / radius)
+	painter.draw_circle(Vector2.ZERO, radius, color, true, -1.0, true)
+	painter.draw_set_transform(Vector2.ZERO)
 
 func _load_sprites() -> void:
 	if not ResourceLoader.exists(ATLAS_PATH):
@@ -138,16 +313,25 @@ func _load_sprites() -> void:
 		# Alpha > 40 bounds measured from the actual 1254x1254 file, with 2px bleed.
 		surprised_face.region = Rect2(148, 60, 1021, 1117)
 		surprised_face.filter_clip = true
+	if ResourceLoader.exists("res://assets/art-v4/mouth-atlas.png"):
+		var mouths := load("res://assets/art-v4/mouth-atlas.png") as Texture2D
+		for frame in range(3):
+			var texture := AtlasTexture.new()
+			texture.atlas = mouths
+			# One shared crop, not independent used_rect normalization: eyes stay registered.
+			texture.region = Rect2(frame * 724 + 70, 16, 638, 683)
+			texture.filter_clip = true
+			_mouth_frames.append(texture)
 
 func _point(p: Variant) -> Vector2:
 	return origin + (Vector2(p) + Vector2(0.5, 0.5)) * cell
 
-func _circle(p: Vector2, radius: float, color: Color) -> void:
-	draw_circle(p, radius, color, true, -1.0, true)
-
 func _draw() -> void:
-	# Canvas drawing keeps RIDs, so retain meshes until this draw list is replaced.
-	_frame_meshes.clear()
+	var draw_started := Time.get_ticks_usec()
+
+
+
+
 	if level.is_empty():
 		return
 	var columns := int(level.get("width", 9))
@@ -156,23 +340,20 @@ func _draw() -> void:
 	if cell <= 0.0:
 		return
 	origin = (size - Vector2(columns, rows) * cell) * 0.5
-	# Let the illustrated meadow remain visible; faint marks communicate grid spacing.
-	for y in range(rows):
-		for x in range(columns):
-			_circle(_point(Vector2i(x, y)), maxf(0.6, cell * 0.014), Color(0.30, 0.40, 0.23, 0.12))
-	for tile in level.get("terrain", []):
-		_sprite(1, _point(tile), Vector2.ONE * cell * 1.00)
-	if level.has("exit"):
-		var opened: bool = state.get("fruit", level.get("fruit", [])).is_empty()
-		var exit_point := _point(level["exit"])
-		if opened:
-			for ring in range(7, 0, -1):
-				_circle(exit_point + Vector2(0, cell * 0.10), cell * (0.22 + ring * 0.045), Color(1.0, 0.94, 0.57, 0.025))
-		_sprite(4 if opened else 3, exit_point + Vector2(0, 0.02 if opened else 0.055) * cell, Vector2.ONE * cell * 0.96)
-	for spike in level.get("hazards", []):
-		_sprite(5, _point(spike) + Vector2(0, cell * 0.105), Vector2.ONE * cell * 0.97)
+	var section_started := Time.get_ticks_usec()
+	var opened: bool = state.get("fruit", level.get("fruit", [])).is_empty()
+	if _static_dirty or not is_equal_approx(_static_cell, cell) or _static_origin != origin or _static_exit_open != opened:
+		_static_cell = cell
+		_static_origin = origin
+		_static_exit_open = opened
+		_static_dirty = false
+		_static_painter.queue_redraw()
+	draw_sections_us["static_submit"] = Time.get_ticks_usec() - section_started
+	section_started = Time.get_ticks_usec()
 	var snake: Array = body_override if not body_override.is_empty() else state.get("body", level.get("body", []))
 	_body(snake)
+	draw_sections_us["body"] = Time.get_ticks_usec() - section_started
+	section_started = Time.get_ticks_usec()
 	if state.get("status", "playing") == "lost":
 		for hazard in level.get("hazards", []):
 			for segment in state.get("body", []):
@@ -181,13 +362,149 @@ func _draw() -> void:
 					break
 	for food in state.get("fruit", level.get("fruit", [])):
 		_sprite(2, _point(food), Vector2.ONE * cell * 0.64)
+	_draw_swallowed_food()
+	draw_sections_us["food_hazards"] = Time.get_ticks_usec() - section_started
+	section_started = Time.get_ticks_usec()
 	_draw_particles()
+	draw_sections_us["particles"] = Time.get_ticks_usec() - section_started
+	draw_calls_total += 1
+	draw_time_us = Time.get_ticks_usec() - draw_started
+
+func _paint_static() -> void:
+	if level.is_empty():
+		return
+	var begun := Time.get_ticks_usec()
+	var t := begun
+	_draw_static_grid()
+	static_draw_sections_us["grid"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
+	for tile in level.get("terrain", []):
+		_static_sprite(1, _point(tile), Vector2.ONE * cell)
+	static_draw_sections_us["terrain"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
+	if level.has("exit"):
+		var p := _point(level.exit)
+		if _static_exit_open:
+			_static_painter.draw_texture_rect(_dot_texture,Rect2(p+Vector2(-0.42,-0.32)*cell,Vector2.ONE*cell*0.84),false,Color(1,0.94,0.57,0.12))
+		_static_sprite(4 if _static_exit_open else 3,p + Vector2(0,0.02 if _static_exit_open else 0.055)*cell,Vector2.ONE*cell*0.96)
+	static_draw_sections_us["exit"] = Time.get_ticks_usec() - t
+	t = Time.get_ticks_usec()
+	for spike in level.get("hazards", []):
+		_static_sprite(5, _point(spike) + Vector2(0,0.105)*cell,Vector2.ONE*cell*0.97)
+	static_draw_sections_us["hazards"] = Time.get_ticks_usec() - t
+	static_draw_time_us = Time.get_ticks_usec() - begun
+	static_draw_calls_total += 1
+
+func _draw_static_grid() -> void:
+	var key := [level.get("width",9),level.get("height",12),cell,origin]
+	if key != _grid_key:
+		_grid_key = key
+		var vertices := PackedVector3Array()
+		var uv := PackedVector2Array()
+		var indices := PackedInt32Array()
+		var radius := maxf(0.6,cell*0.014)
+		for y in range(int(key[1])):
+			for x in range(int(key[0])):
+				var center := _point(Vector2i(x,y))
+				var start := vertices.size()
+				for corner in [Vector2(-1,-1),Vector2(1,-1),Vector2(1,1),Vector2(-1,1)]:
+					var point: Vector2 = center+corner*radius
+					vertices.append(Vector3(point.x,point.y,0))
+					uv.append((corner+Vector2.ONE)*0.5)
+				indices.append_array(PackedInt32Array([start,start+1,start+2,start,start+2,start+3]))
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX]=vertices
+		arrays[Mesh.ARRAY_TEX_UV]=uv
+		arrays[Mesh.ARRAY_INDEX]=indices
+		_grid_mesh.clear_surfaces()
+		_grid_mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	_static_painter.draw_mesh(_grid_mesh,_dot_texture,Transform2D.IDENTITY,Color(0.30,0.40,0.23,0.12))
+
+func _static_sprite(index: int,p:Vector2,bounds:Vector2) -> void:
+	if sprites.size() != 6:
+		return
+	var sprite := sprites[index]
+	var dimensions := sprite.region.size
+	var extent := dimensions * minf(bounds.x / dimensions.x,bounds.y / dimensions.y)
+	_static_painter.draw_texture_rect(sprite,Rect2(p-extent*0.5,extent),false)
+
+func _draw_body_ribbon(path: PackedVector2Array) -> void:
+	var started := Time.get_ticks_usec()
+	var eat_age := float(_reaction_time.get("eat",-1.0))
+	if path != _ribbon_path or not is_equal_approx(cell,_ribbon_cell) or not is_equal_approx(eat_age,_ribbon_eat):
+		_ribbon_path = path
+		_ribbon_cell = cell
+		_ribbon_eat = eat_age
+		var centers := _native_sweep.duplicate()
+		var tail_start := centers[-1]
+		var tail_begin := centers.size()-1
+		for step in range(1,5):
+			var t := float(step)/4.0
+			centers.append(tail_start.lerp(_native_tip,t) + Vector2(0,-0.10*t*t)*cell)
+		var tip_direction := (centers[-1]-centers[-2]).normalized()
+		centers.append(centers[-1]+tip_direction*cell*0.045)
+		var widths: Array[float] = [-1.045,-1.0,-0.94,-0.62,0.21,0.34,0.82,0.95,1.0,1.045]
+		var colors: Array[Color] = [Color(0.75,0.38,0.29,0),Color("bf604b"),Color("ef7253"),Color("ff8b60"),Color("ff9669"),Color("ffdda9"),Color("ffe5b8"),Color("eeb780"),Color("bf604b"),Color(0.75,0.38,0.29,0)]
+		var vertices := PackedVector3Array()
+		var vertex_colors := PackedColorArray()
+		var indices := PackedInt32Array()
+		var total_length := 0.0
+		var first_tangent := (centers[1]-centers[0]).normalized()
+		var first_normal := Vector2(-first_tangent.y,first_tangent.x)
+		var side := -1.0 if first_normal.x + first_normal.y < 0 else 1.0
+		for i in range(centers.size()):
+			if i > 0:
+				total_length += centers[i].distance_to(centers[i-1])
+			var tangent := (centers[mini(i+1,centers.size()-1)]-centers[maxi(0,i-1)]).normalized()
+			var normal := Vector2(-tangent.y,tangent.x)*side
+			var radius := cell * 0.344
+			if i > tail_begin:
+				var taper := minf(1.0,float(i-tail_begin)/4.0)
+				radius = cell*lerpf(0.344,0.045,smoothstep(0.0,1.0,taper))
+			if i == centers.size()-1:
+				radius = cell*0.003
+			if eat_age >= 0:
+				var distance_from_wave := total_length/cell-eat_age*8.0
+				radius *= 1.0 + exp(-distance_from_wave*distance_from_wave*6.0)*0.045*_reaction("eat")
+			for lane in range(widths.size()):
+				var vertex := centers[i]+normal*radius*widths[lane]
+				vertices.append(Vector3(vertex.x,vertex.y,0))
+				vertex_colors.append(colors[lane])
+				if i > 0 and lane > 0:
+					var a := (i-1)*widths.size()+lane-1
+					var b := i*widths.size()+lane-1
+					indices.append_array(PackedInt32Array([a,b,a+1,a+1,b,b+1]))
+		var arrays := []
+		arrays.resize(Mesh.ARRAY_MAX)
+		arrays[Mesh.ARRAY_VERTEX]=vertices
+		arrays[Mesh.ARRAY_COLOR]=vertex_colors
+		arrays[Mesh.ARRAY_INDEX]=indices
+		_body_ribbon.clear_surfaces()
+		_body_ribbon.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	draw_sections_us["body_geometry"] = Time.get_ticks_usec()-started
+	started = Time.get_ticks_usec()
+	draw_mesh(_body_ribbon,null)
+	draw_sections_us["body_submit"] = Time.get_ticks_usec()-started
+
+func _draw_swallowed_food() -> void:
+	if mouth_animation != "swallow" or not _food_source_grid.is_finite() or _mouth_age >= 0.095:
+		return
+	var t := smoothstep(0.0, 0.095, _mouth_age)
+	var center := _point(_food_source_grid).lerp(_mouth_world, t)
+	var extent := cell * lerpf(0.64, 0.015, t)
+	_sprite(2, center, Vector2.ONE * extent)
 
 func _sprite(index: int, p: Vector2, bounds: Vector2, flip: bool = false, tint: Color = Color.WHITE) -> void:
 	if sprites.size() != 6:
 		return
 	var sprite := sprites[index]
-	if index == 0 and surprised_face != null and (state.get("status", "playing") == "lost" or mood == "sad" or _reaction("fall") > 0.0 or _reaction("blocked") > 0.0):
+	var surprised: bool = index == 0 and surprised_face != null and (state.get("status", "playing") == "lost" or mood == "sad" or _reaction("fall") > 0.0 or _reaction("blocked") > 0.0)
+	var mouth_frame := 0.0
+	if index == 0 and _mouth_frames.size() == 3 and not surprised:
+		mouth_frame = clampf(mouth_openness * 2.0, 0.0, 2.0)
+		sprite = _mouth_frames[int(floor(mouth_frame))]
+	if surprised:
 		sprite = surprised_face
 	var scale_factor := minf(bounds.x / sprite.get_width(), bounds.y / sprite.get_height())
 	var dimensions := sprite.get_size() * scale_factor
@@ -196,9 +513,16 @@ func _sprite(index: int, p: Vector2, bounds: Vector2, flip: bool = false, tint: 
 		rect.size.x = -dimensions.x
 	if index == 0:
 		var pose := _head_pose()
-		draw_set_transform(p + pose.offset * cell, pose.angle, pose.scale)
+		var angle: float = _head_heading + pose.angle
+		draw_set_transform(p + pose.offset * cell, angle, pose.scale)
+		var anchor := Vector2(-0.08 if flip else 0.08, 0.34) * cell
+		_mouth_world = p + pose.offset * cell + (anchor * pose.scale).rotated(angle)
 		rect.position -= p
 	draw_texture_rect(sprite, rect, false, tint)
+	if index == 0 and not surprised and _mouth_frames.size() == 3 and mouth_frame < 2.0:
+		var blend: float = mouth_frame - floor(mouth_frame)
+		if blend > 0.001:
+			draw_texture_rect(_mouth_frames[int(floor(mouth_frame)) + 1], rect, false, Color(1, 1, 1, blend))
 	if index == 0:
 		draw_set_transform(Vector2.ZERO)
 
@@ -213,9 +537,8 @@ func _head_pose() -> Dictionary:
 	angle += float(facing_direction.x) * sin(move * PI) * 0.045
 	var eat := _reaction("eat")
 	if eat > 0:
-		var chew := sin((1.0 - eat) * TAU * 3.0) * eat
-		stretch += Vector2(0.085, -0.070) * chew
-		angle += chew * 0.045
+		# Mouth frames perform the chewing; this is only a small secondary nod.
+		angle += sin((1.0 - eat) * TAU * 2.0) * eat * 0.018
 	var fall := _reaction("fall")
 	stretch += Vector2(-0.040, 0.055) * minf(fall * 3.0, 1.0)
 	var land := _reaction("land")
@@ -247,93 +570,42 @@ func _danger_marker(p: Vector2) -> void:
 			draw_polyline(marks, Color("c65857"), maxf(1.4, cell * 0.035), true)
 
 func _curve(points: PackedVector2Array) -> PackedVector2Array:
-	# During growth the interpolated new tail starts on the old tail. Remove
-	# zero-length links before calculating tangents and surface cross-sections.
 	var distinct := PackedVector2Array()
 	for point in points:
 		if distinct.is_empty() or point.distance_squared_to(distinct[-1]) > 0.0001:
 			distinct.append(point)
-	points = distinct
-	var smooth := PackedVector2Array()
-	if points.size() < 3:
-		if points.size() < 2:
-			return points
-		for sample in range(21):
-			smooth.append(points[0].lerp(points[1], float(sample) / 20.0))
-		return smooth
-	smooth.append(points[0])
-	for i in range(1, points.size() - 1):
-		var a := points[i].lerp(points[i - 1], 0.27)
-		var b := points[i].lerp(points[i + 1], 0.27)
+	if distinct.size() < 3:
+		return distinct
+	var smooth := PackedVector2Array([distinct[0]])
+	for i in range(1, distinct.size() - 1):
+		var incoming := (distinct[i] - distinct[i - 1]).normalized()
+		var outgoing := (distinct[i + 1] - distinct[i]).normalized()
+		if absf(incoming.cross(outgoing)) < 0.005 and incoming.dot(outgoing) > 0.99:
+			continue
+		var a := distinct[i].lerp(distinct[i - 1], 0.27)
+		var b := distinct[i].lerp(distinct[i + 1], 0.27)
 		smooth.append(a)
-		for step in range(1, 7):
-			var t := float(step) / 6.0
-			smooth.append(a.lerp(points[i], t).lerp(points[i].lerp(b, t), t))
-	smooth.append(points[-1])
-	var sampled := PackedVector2Array([smooth[0]])
-	for i in range(1, smooth.size()):
-		var steps := maxi(1, ceili(smooth[i].distance_to(smooth[i - 1]) / (cell * 0.10)))
-		for sample in range(1, steps + 1):
-			sampled.append(smooth[i - 1].lerp(smooth[i], float(sample) / steps))
-	return sampled
+		for step in range(1, 5):
+			var t := float(step) / 4.0
+			smooth.append(a.lerp(distinct[i], t).lerp(distinct[i].lerp(b, t), t))
+	smooth.append(distinct[-1])
+	return smooth
 
-func _tube(path: PackedVector2Array, radius: float, offset: Vector2, color: Color, tail: float = 0.10) -> void:
+func _prepare_native_sweep(path: PackedVector2Array) -> void:
+	_native_sweep = path.duplicate()
 	if path.size() < 2:
 		return
-	var lengths: Array[float] = [0.0]
-	for i in range(1, path.size()):
-		lengths.append(lengths[-1] + path[i].distance_to(path[i - 1]))
-	var total := lengths[-1]
-	var left := PackedVector2Array()
-	var right := PackedVector2Array()
-	for i in range(path.size()):
-		var previous := path[maxi(0, i - 1)]
-		var following := path[mini(path.size() - 1, i + 1)]
-		var tangent := (following - previous).normalized()
-		var normal := Vector2(-tangent.y, tangent.x)
-		var tail_factor := clampf((total - lengths[i]) / (cell * 0.45), 0.0, 1.0)
-		var wave := sin(lengths[i] / cell * 4.3 + 0.8) * sin(PI * clampf(lengths[i] / maxf(total, 1.0), 0.0, 1.0))
-		var belly := radius < cell * 0.18
-		var local_radius := lerpf(cell * tail, radius, smoothstep(0.0, 1.0, tail_factor))
-		if _reaction_time.has("eat"):
-			var wave_center := float(_reaction_time.eat) * 8.0
-			var distance_from_wave := lengths[i] / cell - wave_center
-			local_radius *= 1.0 + exp(-distance_from_wave * distance_from_wave * 6.0) * 0.065 * _reaction("eat")
-		if belly:
-			local_radius *= 1.0 + wave * 0.12
-		var local_offset := offset * lerpf(0.1, 1.0, tail_factor)
-		if belly:
-			local_offset += Vector2(wave * 0.007, wave * 0.014) * cell * tail_factor
-		var tail_curl := Vector2(0, -0.10 * pow(1.0 - tail_factor, 2.0)) * cell
-		left.append(path[i] + local_offset + tail_curl + normal * local_radius)
-		right.append(path[i] + local_offset + tail_curl - normal * local_radius)
-	# A tight elbow can have a curvature radius smaller than the tube radius.
-	# Its inner offsets then overlap, so a single closed outline is not a simple
-	# polygon. Build the swept surface directly from adjacent cross-sections;
-	# overlapping same-color triangles fill the bend without polygon triangulation.
-	# One mesh per wash also avoids one draw call per sampled segment.
-	var vertices := PackedVector3Array()
-	var indices := PackedInt32Array()
-	for i in range(left.size()):
-		vertices.append(Vector3(left[i].x, left[i].y, 0))
-		vertices.append(Vector3(right[i].x, right[i].y, 0))
-		if i > 0:
-			var previous := (i - 1) * 2
-			var current := i * 2
-			indices.append_array(PackedInt32Array([previous, current, previous + 1, previous + 1, current, current + 1]))
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = vertices
-	arrays[Mesh.ARRAY_INDEX] = indices
-	var surface := ArrayMesh.new()
-	surface.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	_frame_meshes.append(surface)
-	draw_mesh(surface, null, Transform2D.IDENTITY, color)
-	_circle(path[0] + offset, radius, color)
-	_circle(path[-1] + offset * 0.1 + Vector2(0, -0.10) * cell, cell * tail, color)
-	# A thin antialiased edge gives the contour soft ink without dark pipe outlines.
-	draw_polyline(left, color, 1.0, true)
-	draw_polyline(right, color, 1.0, true)
+	_native_tip = path[-1]
+	var remaining := cell * 0.45
+	while _native_sweep.size() > 1:
+		var end := _native_sweep[-1]
+		var start := _native_sweep[-2]
+		var length := start.distance_to(end)
+		if length > remaining:
+			_native_sweep[-1] = end.lerp(start, remaining / length)
+			break
+		remaining -= length
+		_native_sweep.remove_at(_native_sweep.size() - 1)
 
 func _body(snake: Array) -> void:
 	if snake.is_empty():
@@ -342,46 +614,28 @@ func _body(snake: Array) -> void:
 	for part in snake:
 		points.append(_point(part))
 	var path := _curve(points)
-	if points.size() > 1:
-		# Warm shaded outer contour, coral midtones, broad continuous cream underside.
-		_tube(path, cell * 0.367, Vector2(0.02, 0.08) * cell, Color(0.26, 0.20, 0.14, 0.11), 0.09)
-		_tube(path, cell * 0.344, Vector2.ZERO, Color("bf604b"), 0.087)
-		_tube(path, cell * 0.330, Vector2(0, -0.008) * cell, Color("ef7253"), 0.074)
-		for wash in range(8):
-			var amount := float(wash + 1) / 8.0
-			_tube(path, cell * lerpf(0.330, 0.277, amount), Vector2(-0.020 * amount, lerpf(-0.008, -0.065, amount)) * cell, Color("ef7253").lerp(Color("ff8b60"), amount), lerpf(0.074, 0.054, amount))
-		_tube(path, cell * 0.123, Vector2(0.035, 0.186) * cell, Color("ffd9a2"), 0.028)
-		_tube(path, cell * 0.108, Vector2(0.044, 0.197) * cell, Color("ffe5b8"), 0.024)
-		_tube(path, cell * 0.036, Vector2(-0.046, -0.196) * cell, Color(1, 0.75, 0.54, 0.15), 0.010)
-		# Organic freckle groups break the flat fill without repeating a mechanical stripe.
+	_prepare_native_sweep(path)
+	if path.size() > 1:
+		_draw_body_ribbon(path)
+		var spots_started := Time.get_ticks_usec()
+		# The original twelve freckles/glaze dabs are baked once into each stamp.
+		# One texture call per body cell replaces hundreds of per-frame script calls.
 		for i in range(1, points.size()):
 			var p := points[i].lerp(points[i - 1], 0.38) if i == points.size() - 1 else points[i]
-			var f := float(i)
 			var small := 0.76 if i == points.size() - 1 else 1.0
-			_oval(p + Vector2(-0.075 + sin(f * 2.1) * 0.045, -0.10) * cell, Vector2(0.065, 0.032) * cell * small, Color("ee805f"), -0.42 + sin(f) * 0.35)
-			_oval(p + Vector2(0.10, -0.045) * cell, Vector2(0.036, 0.061) * cell * small, Color("ed805f"), 0.25)
-			_oval(p + Vector2(0.06, 0.21) * cell, Vector2(0.041, 0.025) * cell * small, Color("f49b76"), -0.15)
-			# Translucent irregular glaze flecks lend the procedural linking surface
-			# some of the watercolor variation present in the painted head sprite.
-			for fleck in range(9):
-				var seed_value := f * 13.7 + float(fleck) * 5.17
-				var center := p + Vector2(sin(seed_value) * 0.22, -0.10 + cos(seed_value * 1.31) * 0.13) * cell * small
-				var radius := Vector2(0.023 + absf(sin(seed_value * 0.7)) * 0.033, 0.014 + absf(cos(seed_value)) * 0.020) * cell * small
-				_oval(center, radius, Color(1.0, 0.75, 0.50, 0.28), seed_value)
+			if not _freckle_stamps.is_empty():
+				var extent := Vector2.ONE * cell * small
+				draw_texture_rect(_freckle_stamps[(i - 1) % _freckle_stamps.size()], Rect2(p - extent * 0.5, extent), false)
+		draw_sections_us["body_spots"] = Time.get_ticks_usec()-spots_started
+	var head_started := Time.get_ticks_usec()
 	var direction := Vector2.RIGHT
 	if points.size() > 1:
 		direction = (points[0] - points[1]).normalized()
-	if facing_direction != Vector2i.ZERO:
+	if points.size() < 2 and facing_direction != Vector2i.ZERO:
 		direction = Vector2(facing_direction)
-	# Keep expressive paired eyes upright. Horizontal mirror signals facing direction;
-	# vertical intent is supplied by the neck rather than rotating the face sideways.
-	_sprite(0, points[0] + Vector2(0, -0.12) * cell, Vector2(1.05, 1.20) * cell, direction.x < -0.2)
-
-func _oval(p: Vector2, dimensions: Vector2, color: Color, rotation: float) -> void:
-	var polygon := PackedVector2Array()
-	for i in range(20):
-		var a := float(i) / 20.0 * TAU
-		polygon.append(p + Vector2(cos(a) * dimensions.x, sin(a) * dimensions.y).rotated(rotation))
-	draw_colored_polygon(polygon, color)
-	polygon.append(polygon[0])
-	draw_polyline(polygon, color, 0.6, true)
+	if absf(direction.x) > 0.04:
+		_face_flip = direction.x < 0.0
+	_head_heading = wrapf(direction.angle() - (PI if _face_flip else 0.0), -PI, PI)
+	# Head and mouth follow the continuous rendered neck tangent, including UP/DOWN.
+	_sprite(0, points[0] + Vector2(0, -0.12).rotated(_head_heading) * cell, Vector2(1.05, 1.20) * cell, _face_flip)
+	draw_sections_us["body_head"] = Time.get_ticks_usec()-head_started

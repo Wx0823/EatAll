@@ -14,6 +14,7 @@ const CREAM := Color("fff3da")
 const MINT := Color("dfe9d6")
 const MOVE_SECONDS := 0.16
 const FALL_ACCELERATION := 160.0 # Grid cells / second²; one continuous fall.
+const MAX_FRAME_CARRY := 0.08 # Long stalls never fast-forward extra grid actions.
 
 var save_path := "user://progress.json"
 var qa_mode := false
@@ -92,6 +93,10 @@ func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	get_tree().quit_on_go_back = false
 	_show_home()
+	if OS.is_debug_build() and FileAccess.file_exists("user://qa/frame-probe.enabled"):
+		var probe := preload("res://scripts/frame_probe.gd").new()
+		probe.game = self
+		add_child(probe)
 
 func _style(fill: Color, border: Color = Color.TRANSPARENT, radius: int = 18, shadow: bool = false) -> StyleBoxFlat:
 	var s := StyleBoxFlat.new()
@@ -387,6 +392,8 @@ func try_move(d: Vector2i) -> bool:
 	board.motion_active = true
 	board.facing_direction = d
 	board.react("move", d)
+	if animation_ate:
+		board.anticipate_food(d, Vector2(animation_frames[0].body[0]))
 	audio.play("move")
 	_update_hud()
 	if skip_animations:
@@ -411,17 +418,28 @@ func _process(delta: float) -> void:
 	# Never replay missed ticks after a stall or a long gravity round.
 	if held != Vector2i.ZERO:
 		repeat_clock -= delta
+	var carry := 0.0
 	if busy:
+		var round_duration := MOVE_SECONDS + sqrt(2.0 * (animation_frames.size()-1) / FALL_ACCELERATION)
 		animation_time += delta
 		_advance_animation()
 		if busy:
 			return
+		if delta <= MAX_FRAME_CARRY:
+			carry = clampf(animation_time - round_duration, 0.0, MAX_FRAME_CARRY)
 	if state.get("status", "") == "playing" and held != Vector2i.ZERO and not repeat_blocked:
+		var accepted := false
 		if pending_turn:
 			pending_turn = false
-			try_move(held)
+			accepted = try_move(held)
 		elif repeat_clock <= 0:
-			try_move(held)
+			accepted = try_move(held)
+		if accepted and busy and carry > 0:
+			# Keep fractional frame time in the next visual step. Never execute a
+			# second logical action here, even if an entire frame was missed.
+			animation_time = carry
+			repeat_clock -= carry
+			_advance_animation()
 
 func _advance_animation() -> void:
 	var moved: Dictionary = animation_frames[0]

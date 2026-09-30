@@ -1,0 +1,48 @@
+EatAll v0.4.0 verification — 2026-09-30
+Repo E:/吃吃吃 — https://github.com/Wx0823/EatAll.git
+
+FINAL TESTS: tools/test.ps1, exit0
+RULES RESULT: 410 checks, 0 failures
+INDEPENDENT_QA checks=539 failures=0
+INDEPENDENT_UI_QA checks=141 failures=0
+MOTION REVIEW checks=73 failures=0
+RESPONSIVENESS checks=321 failures=0
+
+FINAL GRAPHICS: capture_responsiveness.gd / capture_cache_v4.gd
+Both exit0; no ERROR/WARNING; CACHE_ART_REVIEW failures=0
+Independent report: art-performance-review.md; final captures screenshots/01–17
+
+ANDROID BEFORE: first mouth candidate, LDPlayer14 Android14, same L1 scene
+14:24:04.217 EATALL_FRAME_PROBE process_hz=45.7 presents_hz=45.7 max_delta_ms=142.7 board_draw_ms=97.48 draws=6 moving_frames=6
+14:24:06.350 EATALL_FRAME_PROBE process_hz=12.5 presents_hz=12.5 max_delta_ms=150.0 board_draw_ms=95.14 draws=16 moving_frames=6
+14:24:08.348 EATALL_FRAME_PROBE process_hz=40.4 presents_hz=40.4 max_delta_ms=134.1 board_draw_ms=99.62 draws=7 moving_frames=0
+
+ANDROID FINAL L1: four 650ms right holds and replay, screenrecord active
+14:57:16.666 EATALL_FRAME_PROBE process_hz=57.7 presents_hz=57.7 max_delta_ms=32.0 board_draw_ms=0.31 draws=18 moving_frames=18
+14:57:18.682 EATALL_FRAME_PROBE process_hz=56.4 presents_hz=56.4 max_delta_ms=39.5 board_draw_ms=2.17 draws=92 moving_frames=35
+14:57:20.698 EATALL_FRAME_PROBE process_hz=57.2 presents_hz=57.2 max_delta_ms=40.4 board_draw_ms=2.34 draws=95 moving_frames=27
+14:57:22.697 EATALL_FRAME_PROBE process_hz=57.4 presents_hz=57.4 max_delta_ms=45.7 board_draw_ms=2.38 draws=94 moving_frames=27
+14:57:24.712 EATALL_FRAME_PROBE process_hz=60.0 presents_hz=60.0 max_delta_ms=16.7 board_draw_ms=1.38 draws=18 moving_frames=0
+L1 static_grid_us=3–4; static_total_us=16–18. Win stars are included in dynamic_draw means.
+
+ANDROID FINAL L12: RRUURRULLDDDLLL, 60ms swipe then650ms wait
+Final15steps /3fruit /won — screenshot22
+15:00:18.082 EATALL_FRAME_PROBE process_hz=57.4 presents_hz=57.4 max_delta_ms=47.5 board_draw_ms=0.20 draws=53 moving_frames=16
+15:00:20.083 EATALL_FRAME_PROBE process_hz=58.3 presents_hz=58.3 max_delta_ms=30.4 board_draw_ms=0.21 draws=20 moving_frames=16
+15:00:22.085 EATALL_FRAME_PROBE process_hz=57.0 presents_hz=57.0 max_delta_ms=31.6 board_draw_ms=0.19 draws=97 moving_frames=38
+15:00:24.104 EATALL_FRAME_PROBE process_hz=57.2 presents_hz=57.2 max_delta_ms=33.3 board_draw_ms=0.20 draws=29 moving_frames=23
+15:00:26.106 EATALL_FRAME_PROBE process_hz=57.8 presents_hz=57.8 max_delta_ms=31.1 board_draw_ms=0.16 draws=53 moving_frames=22
+15:00:28.107 EATALL_FRAME_PROBE process_hz=56.3 presents_hz=56.3 max_delta_ms=32.3 board_draw_ms=0.76 draws=76 moving_frames=23
+15:00:30.107 EATALL_FRAME_PROBE process_hz=59.0 presents_hz=59.0 max_delta_ms=40.4 board_draw_ms=2.43 draws=46 moving_frames=0
+15:00:32.126 EATALL_FRAME_PROBE process_hz=60.0 presents_hz=60.0 max_delta_ms=16.7 board_draw_ms=0.00 draws=0 moving_frames=0
+L12 static_grid_us=86; static_total_us=101; on exit refresh grid4 /static22us.
+
+BUILD: tools/build.ps1 All exit0
+APK org.wx0823.eatall versionCode4 versionName0.4.0; install -r Success
+APK apksigner verify --verbose: Verifies; v2 true; v3 true
+WINDOWS: headless quit-after45; explicit process ExitCode0; log clean
+Probe marker removed; app force-stopped and restarted after recording
+Artifacts SHA256 and byte sizes: delivery.md
+
+Limits: emulator pre-existing FeedShaderGLES3 error remains; no SCRIPT ERROR/triangulation/FATAL in gameplay path.
+Mixed 2s windowHz is not sustained movementGPU FPS. CPU_draw is not GPU completion time. No real phone manual feel test.
