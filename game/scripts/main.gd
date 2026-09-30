@@ -48,6 +48,9 @@ var animation_time := 0.0
 var animation_index := 0
 var animation_ate := false
 var animation_eat_fired := false
+var animation_food_events: Array = []
+var animation_food_cursor := 0
+var animation_food_prepared := false
 var animation_fall_started := false
 var animation_continuous := false
 var status_time := 0.0
@@ -344,12 +347,13 @@ func _layout() -> void:
 		if panel:
 			panel.position = Vector2((w-panel.size.x)*0.5, maxf(top+10, (h-panel.size.y)*0.5))
 
-func _update_hud() -> void:
+func _update_hud(visible_state: Dictionary = {}) -> void:
 	if not is_instance_valid(counter) or mode != "play":
 		return
 	var total: int = levels[level_index].fruit.size()
-	counter.text = "点心  %d / %d%s" % [total-state.fruit.size(), total, "  ·  出口已打开" if state.fruit.is_empty() else ""]
-	counter.add_theme_font_size_override("font_size", 14 if state.fruit.is_empty() else 16)
+	var shown := state if visible_state.is_empty() else visible_state
+	counter.text = "点心  %d / %d%s" % [total-shown.fruit.size(), total, "  ·  出口已打开" if shown.fruit.is_empty() else ""]
+	counter.add_theme_font_size_override("font_size", 14 if shown.fruit.is_empty() else 16)
 	step_label.text = "%d 步" % state.moves
 	undo_button.disabled = history.is_empty()
 
@@ -383,8 +387,11 @@ func try_move(d: Vector2i) -> bool:
 	animation_frames = result.frames
 	animation_index = 0
 	animation_time = 0.0
-	animation_ate = result.ate
+	animation_ate = result.active_ate
 	animation_eat_fired = false
+	animation_food_events = result.eat_events.duplicate(true)
+	animation_food_cursor = 0
+	animation_food_prepared = false
 	animation_fall_started = false
 	animation_continuous = held != Vector2i.ZERO
 	repeat_clock = MOVE_SECONDS
@@ -394,11 +401,12 @@ func try_move(d: Vector2i) -> bool:
 	board.react("move", d)
 	if animation_ate:
 		board.anticipate_food(d, Vector2(animation_frames[0].body[0]))
+		animation_food_prepared = true
 	audio.play("move")
-	_update_hud()
+	_update_hud(animation_from)
 	if skip_animations:
-		if animation_ate:
-			board.react("eat", d)
+		animation_time = MOVE_SECONDS + sqrt(2.0 * (animation_frames.size()-1) / FALL_ACCELERATION)
+		_update_food_animation()
 		_finish_animation()
 	return true
 
@@ -455,25 +463,19 @@ func _advance_animation() -> void:
 			var from := Vector2(animation_from.body[mini(i, animation_from.body.size()-1)])
 			positions.append(from.lerp(Vector2(moved.body[i]), blend))
 		board.set_data(levels[level_index], moved if t >= 0.75 else animation_from)
-		if animation_ate and t >= 0.75 and not animation_eat_fired:
-			animation_eat_fired = true
-			board.react("eat", board.facing_direction)
-			audio.play("eat")
 	else:
-		if animation_ate and not animation_eat_fired:
-			animation_eat_fired = true
-			board.react("eat", board.facing_direction)
-			audio.play("eat")
 		if fall_rows > 0:
 			if not animation_fall_started:
 				animation_fall_started = true
 				board.react("fall")
 			var elapsed := minf(animation_time - MOVE_SECONDS, fall_seconds)
 			var drop := minf(fall_rows, 0.5 * FALL_ACCELERATION * elapsed * elapsed)
-			animation_index = mini(int(drop), fall_rows)
+			animation_index = mini(int(drop + 0.000001), fall_rows)
 			for part in moved.body:
 				positions.append(Vector2(part) + Vector2(0, drop))
 			board.set_data(levels[level_index], animation_frames[animation_index])
+			board.body_override = positions
+		_update_food_animation()
 		if animation_time >= MOVE_SECONDS + fall_seconds:
 			if fall_rows > 0 and state.status != "lost":
 				board.body_override = []
@@ -483,12 +485,40 @@ func _advance_animation() -> void:
 			_finish_animation()
 			return
 	board.body_override = positions
+	_update_food_animation()
 	board.queue_redraw()
+
+func _update_food_animation() -> void:
+	while animation_food_cursor < animation_food_events.size():
+		var event: Dictionary = animation_food_events[animation_food_cursor]
+		var contact := MOVE_SECONDS * 0.75 if event.frame == 0 else MOVE_SECONDS + sqrt(2.0 * event.frame / FALL_ACCELERATION)
+		if animation_time < contact - 0.10:
+			return
+		if not animation_food_prepared:
+			# Nearby falling food can arrive sooner than one full swallow cycle.
+			# Preserve the current cube until the next actual contact, rather than
+			# overwriting it with early anticipation for the following cube.
+			if board.mouth_animation == "swallow" and animation_time + 0.000001 < contact:
+				return
+			board.anticipate_food(event.direction, Vector2(event.cell))
+			animation_food_prepared = true
+		if animation_time + 0.000001 < contact:
+			return
+		board.react("eat", event.direction)
+		audio.play("eat")
+		_update_hud(board.state)
+		if event.frame == 0:
+			animation_eat_fired = true
+		animation_food_cursor += 1
+		animation_food_prepared = false
 
 func _cancel_animation() -> void:
 	busy = false
 	terminal_delay = 0.0
 	animation_frames.clear()
+	animation_food_events.clear()
+	animation_food_cursor = 0
+	animation_food_prepared = false
 	if is_instance_valid(board):
 		board.body_override = []
 		board.motion_active = false

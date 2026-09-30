@@ -24,7 +24,7 @@ static func load_levels() -> Array:
 	return levels
 
 static func initial_state(level: Dictionary) -> Dictionary:
-	return {"body": level.body.duplicate(), "fruit": level.fruit.duplicate(), "status": "playing", "moves": 0}
+	return {"body": level.body.duplicate(), "fruit": level.fruit.duplicate(), "growth_pending": 0, "status": "playing", "moves": 0}
 
 static func _supported(level: Dictionary, body: Array) -> bool:
 	for p in body:
@@ -41,7 +41,7 @@ static func _danger(level: Dictionary, body: Array) -> String:
 	return ""
 
 static func step(level: Dictionary, state: Dictionary, direction: Vector2i) -> Dictionary:
-	var result := {"valid": false, "state": state.duplicate(true), "frames": [], "ate": false, "fell": 0, "reason": ""}
+	var result := {"valid": false, "state": state.duplicate(true), "frames": [], "ate": false, "active_ate": false, "eat_events": [], "fell": 0, "reason": ""}
 	if state.status != "playing":
 		result.reason = "terminal"
 		return result
@@ -54,8 +54,10 @@ static func step(level: Dictionary, state: Dictionary, direction: Vector2i) -> D
 		result.reason = "reverse"
 		return result
 	var ate: bool = state.fruit.has(target)
+	var pending := int(state.get("growth_pending", 0))
+	var growing := ate or pending > 0
 	var occupied := body.duplicate()
-	if not ate:
+	if not growing:
 		occupied.pop_back()
 	if level.terrain.has(target):
 		result.reason = "wall"
@@ -65,14 +67,17 @@ static func step(level: Dictionary, state: Dictionary, direction: Vector2i) -> D
 		return result
 	var next: Dictionary = state.duplicate(true)
 	body.push_front(target)
-	if not ate:
+	if not growing:
 		body.pop_back()
 	next.body = body
+	next.growth_pending = maxi(0, pending + int(ate) - int(growing))
 	if ate:
 		next.fruit.erase(target)
+		result.eat_events.append({"frame": 0, "cell": target, "direction": direction})
 	next.moves += 1
 	result.valid = true
 	result.ate = ate
+	result.active_ate = ate
 	var danger := _danger(level, body)
 	if not danger.is_empty():
 		next.status = "lost"
@@ -87,6 +92,13 @@ static func step(level: Dictionary, state: Dictionary, direction: Vector2i) -> D
 		if not danger.is_empty():
 			next.status = "lost"
 			result.reason = danger
+		elif next.fruit.has(body[0]):
+			# A rigid fall cannot safely insert a new tail cell in every shape.
+			# Consume now; unfold one earned segment at the next active step.
+			next.fruit.erase(body[0])
+			next.growth_pending += 1
+			result.ate = true
+			result.eat_events.append({"frame": result.fell, "cell": body[0], "direction": Vector2i.DOWN})
 		result.frames.append(next.duplicate(true))
 	if next.status == "playing" and next.fruit.is_empty() and next.body[0] == level.exit:
 		next.status = "won"

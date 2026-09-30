@@ -35,6 +35,14 @@ func _initialize() -> void:
 		check(state.fruit.is_empty(), "win requires all fruit")
 		print("REPLAY EA-%02d: WON, moves=%d, fallen_cells=%d, solution=%s" % [level.id, steps, fall, level.solution])
 	var one: Dictionary = levels[0]
+	for candidate in [{"index":10,"path":"UURURRRDRUULLLLLDL"},{"index":11,"path":"RRRRDLLULDDLL"}]:
+		var replay := Rules.initial_state(levels[candidate.index])
+		var valid := true
+		for letter in candidate.path:
+			var transition := Rules.step(levels[candidate.index], replay, DIRECTIONS[letter])
+			valid = valid and transition.valid and transition.state.status != "lost"
+			replay = transition.state
+		check(valid and replay.status == "won", "EA-R0.2 new falling-food route wins level %d" % (candidate.index+1))
 	var start := Rules.initial_state(one)
 	var reverse := Rules.step(one, start, Vector2i.LEFT)
 	check(not reverse.valid and reverse.reason == "reverse" and reverse.state == start, "reverse is inert")
@@ -54,7 +62,7 @@ func _initialize() -> void:
 	check(Rules.step(tail, Rules.initial_state(tail), Vector2i.RIGHT).fell == 0, "only tail supports whole body")
 	var falling := fixture([Vector2i(2,2),Vector2i(1,2),Vector2i(0,2)], [Vector2i(0,3),Vector2i(1,7),Vector2i(2,7),Vector2i(3,7)], [Vector2i(3,4)])
 	var drop := Rules.step(falling, Rules.initial_state(falling), Vector2i.RIGHT)
-	check(drop.fell == 4 and drop.state.fruit.size() == 1 and not drop.ate, "falling crosses fruit without eating")
+	check(drop.fell == 4 and drop.state.fruit.is_empty() and drop.ate and drop.state.growth_pending == 1, "falling head consumes crossed fruit and earns one segment")
 	falling.hazards = [Vector2i(1,4)]
 	drop = Rules.step(falling, Rules.initial_state(falling), Vector2i.RIGHT)
 	check(drop.state.status == "lost" and drop.reason == "spike" and drop.fell == 2, "tail hits spike during fall")

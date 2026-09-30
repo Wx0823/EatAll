@@ -499,7 +499,7 @@ func _sprite(index: int, p: Vector2, bounds: Vector2, flip: bool = false, tint: 
 	if sprites.size() != 6:
 		return
 	var sprite := sprites[index]
-	var surprised: bool = index == 0 and surprised_face != null and (state.get("status", "playing") == "lost" or mood == "sad" or _reaction("fall") > 0.0 or _reaction("blocked") > 0.0)
+	var surprised: bool = index == 0 and surprised_face != null and (state.get("status", "playing") == "lost" or mood == "sad" or (mouth_animation == "idle" and (_reaction("fall") > 0.0 or _reaction("blocked") > 0.0)))
 	var mouth_frame := 0.0
 	if index == 0 and _mouth_frames.size() == 3 and not surprised:
 		mouth_frame = clampf(mouth_openness * 2.0, 0.0, 2.0)

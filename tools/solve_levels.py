@@ -6,23 +6,29 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 DIRS = {'U': (0,-1), 'D': (0,1), 'L': (-1,0), 'R': (1,0)}
 
 def step(level, state, direction):
-    body, fruit = state
+    body, fruit, pending = state
     dx,dy = DIRS[direction]
     target = (body[0][0]+dx, body[0][1]+dy)
     if target == body[1]: return None
     eating = target in fruit
-    if target in level['solid'] or target in (body if eating else body[:-1]): return None
-    body = (target,) + (body if eating else body[:-1])
+    growing = eating or pending > 0
+    if target in level['solid'] or target in (body if growing else body[:-1]): return None
+    body = (target,) + (body if growing else body[:-1])
+    pending = max(0, pending + int(eating) - int(growing))
     fruit = fruit - {target} if eating else fruit
     while True:
         if any(x<0 or y<0 or x>=level['width'] or y>=level['height'] or (x,y) in level['spikes'] for x,y in body): return None
         if any((x,y+1) in level['solid'] for x,y in body): break
         body = tuple((x,y+1) for x,y in body)
-    return body, fruit
+        if any(x<0 or y<0 or x>=level['width'] or y>=level['height'] or (x,y) in level['spikes'] for x,y in body): return None
+        if body[0] in fruit:
+            fruit = fruit - {body[0]}
+            pending += 1
+    return body, fruit, pending
 
 def solve(raw, limit, seconds):
     level = dict(raw, solid=set(map(tuple,raw['terrain'])), spikes=set(map(tuple,raw['hazards'])))
-    start = (tuple(map(tuple,raw['body'])), frozenset(map(tuple,raw['fruit'])))
+    start = (tuple(map(tuple,raw['body'])), frozenset(map(tuple,raw['fruit'])), 0)
     queue = collections.deque([start]); parents = {start: None}
     begin = time.monotonic()
     while queue:

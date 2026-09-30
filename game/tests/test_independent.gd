@@ -20,7 +20,7 @@ func fixture(body: Array, ground: Array, fruit: Array = [], spikes: Array = [], 
 	return {"id": 999, "width": 8, "height": 8, "body": points(body), "terrain": points(ground), "fruit": points(fruit), "hazards": points(spikes), "exit": gate}
 
 func same(a: Dictionary, b: Dictionary) -> bool:
-	return a.body == b.body and a.fruit == b.fruit and a.status == b.status and a.moves == b.moves
+	return a.body == b.body and a.fruit == b.fruit and a.status == b.status and a.moves == b.moves and a.get("growth_pending",0) == b.get("growth_pending",0)
 
 func _initialize() -> void:
 	var floor_cells := []
@@ -64,7 +64,7 @@ func _initialize() -> void:
 	var falling := fixture([[2,2],[1,2],[0,2]], [[0,3],[3,6]], [[3,3],[3,5]], [], Vector2i(7,1))
 	var fall: Dictionary = Rules.step(falling, Rules.initial_state(falling), Vector2i.RIGHT)
 	check(fall.fell == 3 and fall.state.body[0] == Vector2i(3,5), "gravity falls whole body to actual terrain")
-	check(fall.state.fruit.size() == 2 and fall.state.body.size() == 3 and not fall.ate, "fall passing and landing on fruit does not eat")
+	check(fall.state.fruit.is_empty() and fall.state.body.size() == 3 and fall.state.growth_pending == 2 and fall.ate, "fall passing and landing on fruit eats twice without reshaping the rigid body")
 	check(fall.frames.size() == 4, "animation includes active step and each single-cell fall")
 	check(fall.frames[0].body[0] == Vector2i(3,2) and fall.frames[1].body[0] == Vector2i(3,3), "intermediate frames preserve distinct positions")
 	var caller: Dictionary = Rules.initial_state(falling)
@@ -134,7 +134,7 @@ func _initialize() -> void:
 			check(transition.valid, "solution valid level %d step %d" % [shipped.id, steps])
 			check(same(state, prior), "replay source immutable level %d step %d" % [shipped.id, steps])
 			state = transition.state
-			check(state.body.size() == length + food_count - state.fruit.size(), "length conservation level %d step %d" % [shipped.id, steps])
+			check(state.body.size() + state.growth_pending == length + food_count - state.fruit.size(), "earned length conservation level %d step %d" % [shipped.id, steps])
 			check(state.status != "lost", "solution survives level %d step %d" % [shipped.id, steps])
 		check(state.status == "won" and state.fruit.is_empty() and state.body[0] == shipped.exit, "complete win level " + str(shipped.id))
 		check(same(Rules.initial_state(shipped), start), "replay leaves level data unchanged " + str(shipped.id))

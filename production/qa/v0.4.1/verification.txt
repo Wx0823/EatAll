@@ -1,0 +1,37 @@
+EatAll v0.4.1 — 2026-09-30
+Repo E:/吃吃吃 origin https://github.com/Wx0823/EatAll.git
+
+tools/test.ps1 final:
+RULES RESULT: 412 checks, 0 failures
+INDEPENDENT_QA checks=539 failures=0
+INDEPENDENT_UI_QA checks=141 failures=0
+MOTION REVIEW checks=73 failures=0
+RESPONSIVENESS checks=321 failures=0
+FALL_FOOD_QA checks=44 failures=0
+Total1530 failures0. No SCRIPT ERROR/WARNING in final regression log.
+
+Independent capture_fall_food.gd: exit0; CAPTURE failures0; no ERROR/WARNING.
+Screens01–06: native touch, formalL12, isolated save; manual time samples, not FPS evidence.
+Independent input/multi-event report: fall-food-review.md
+
+Python tools/solve_levels.py: all12 solved.
+L11 states692 solutionUURURRRDRUULLLLLDL
+L12 states1567 solutionRRRRDLLULDDLL
+Godot test_rules replays original12 routes plus new11/12 wins.
+
+tools/build.ps1 All exit0
+APK install-r Success; dumpsys versionCode5 /versionName0.4.1
+APK apksigner verify: Verifies; v2true /v3true
+Windows explicit process ExitCode0, headless45frames; runtime log clean.
+
+Android14 LDPlayer14, actual720x1280 game output:
+Start L12=0moves/0fruit, native60ms directionsRRDRR, wait600ms per input.
+Final5moves/2fruit; fruit(6,6)removed — screenshot21-native-fall-eaten.png
+Native Undo button =>4moves/1fruit, fruit(6,6)restored — screenshot22-native-undo.png
+Native right again =>5moves/2fruit, collected once.
+native-fall-food.mp4 actual9sec screenrecord, compression only, no inserted frames.
+Gameplay recent log no SCRIPT ERROR/triangulation/FATAL; default diagnostic marker absent from prior iteration.
+
+Limit: first automated attempt captured startup placeholder and was discarded; later entry grounded in actual home andL12zero moves.
+Limit: FeedShaderGLES3 simulator error remains; no realphone manualfeel/performance claims.
+Artifact hashes/sizes: delivery.md
