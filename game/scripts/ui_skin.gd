@@ -50,8 +50,9 @@ static func dpad_key(pressed: bool = false, disabled: bool = false) -> StyleBoxT
 	skin.set_texture_margin(SIDE_BOTTOM,23)
 	skin.set_content_margin(SIDE_LEFT,5)
 	skin.set_content_margin(SIDE_RIGHT,5)
-	skin.set_content_margin(SIDE_TOP,9 if state == 1 else 5)
-	skin.set_content_margin(SIDE_BOTTOM,9 if state == 1 else 13)
+	# Center symbols on the raised face, keeping the same text space and press travel.
+	skin.set_content_margin(SIDE_TOP,6 if state == 1 else 2)
+	skin.set_content_margin(SIDE_BOTTOM,12 if state == 1 else 16)
 	cache[key] = skin
 	return skin
 
@@ -86,7 +87,8 @@ static func _button_skin(row: int,state: int,as_panel: bool) -> StyleBoxTexture:
 	skin.set_texture_margin(SIDE_BOTTOM,24)
 	skin.set_content_margin(SIDE_LEFT,18 if as_panel else 12)
 	skin.set_content_margin(SIDE_RIGHT,18 if as_panel else 12)
-	skin.set_content_margin(SIDE_TOP,16 if as_panel else (12 if state == 1 else 8))
-	skin.set_content_margin(SIDE_BOTTOM,20 if as_panel else (10 if state == 1 else 14))
+	# The baked sidewall is below the face. Move text up 7px without shrinking its area.
+	skin.set_content_margin(SIDE_TOP,16 if as_panel else (5 if state == 1 else 1))
+	skin.set_content_margin(SIDE_BOTTOM,20 if as_panel else (17 if state == 1 else 21))
 	cache[key] = skin
 	return skin

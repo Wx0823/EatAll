@@ -1,0 +1,39 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+OpenGL API 3.3.0 NVIDIA 616.56 - Compatibility - Using Device: NVIDIA - NVIDIA GeForce RTX 5060 Ti
+
+CAPTURE zh_CN-01-home.png
+CAPTURE zh_CN-01a-home-pressed.png
+CAPTURE zh_CN-02-settings.png
+CAPTURE zh_CN-03-picker.png
+CAPTURE zh_CN-03a-picker-pressed.png
+CAPTURE zh_CN-04-levels.png
+CAPTURE zh_CN-05-game.png
+CAPTURE zh_CN-06-pause.png
+CAPTURE zh_CN-07-win.png
+CAPTURE zh_CN-08-failure-ui.png
+CAPTURE zh_TW-01-home.png
+CAPTURE zh_TW-01a-home-pressed.png
+CAPTURE zh_TW-02-settings.png
+CAPTURE zh_TW-03-picker.png
+CAPTURE zh_TW-03a-picker-pressed.png
+CAPTURE zh_TW-04-levels.png
+CAPTURE zh_TW-05-game.png
+CAPTURE zh_TW-06-pause.png
+CAPTURE zh_TW-07-win.png
+CAPTURE zh_TW-08-failure-ui.png
+CAPTURE en-01-home.png
+CAPTURE en-01a-home-pressed.png
+CAPTURE en-02-settings.png
+CAPTURE en-03-picker.png
+CAPTURE en-03a-picker-pressed.png
+CAPTURE en-04-levels.png
+CAPTURE en-05-game.png
+CAPTURE en-06-pause.png
+CAPTURE en-07-win.png
+CAPTURE en-08-failure-ui.png
+CAPTURE en-09-short-home.png
+CAPTURE en-10-short-settings.png
+CAPTURE en-11-short-picker.png
+CAPTURE en-12-short-game.png
+CAPTURE en-13-short-pause.png
+BUTTON_ALIGNMENT_CAPTURE failures=0
