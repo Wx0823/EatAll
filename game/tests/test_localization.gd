@@ -38,8 +38,10 @@ func run()->void:
 	app=load("res://main.tscn").instantiate()
 	app.qa_mode=true
 	app.save_path=test_path
+	app.auth_path=test_path+".auth"
 	root.add_child(app)
 	app.audio.enabled=false
+	app.auth.login_guest()
 	check(app.language==Loc.normalize_locale(OS.get_locale()),"First run follows actual OS normalized language")
 	await verify_runtime()
 	print("LOCALIZATION_QA checks=",checks," failures=",failures)
@@ -103,7 +105,7 @@ func verify_runtime()->void:
 		await process_frame
 		check(app.language==locale and app.progress.language==locale,"Native locale selection applies "+locale)
 		check(app.overlay_kind=="settings","Selection returns to translated settings")
-		check(app.content.get_node("Title").text==Loc.text("home.title",locale),"Home behind settings updates immediately")
+		check(app.content.get_node("Settings").text==Loc.text("home.settings",locale),"Lobby behind settings updates immediately")
 		check(app.overlay.get_node("Panel/Heading").text==Loc.text("settings.title",locale),"Settings heading updates immediately")
 		verify_page(app.content)
 		verify_page(app.overlay)
@@ -153,6 +155,7 @@ func verify_runtime()->void:
 	app=load("res://main.tscn").instantiate()
 	app.qa_mode=true
 	app.save_path=test_path
+	app.auth_path=test_path+".auth"
 	root.add_child(app)
 	check(app.language=="en" and app.progress.language=="en","Restart respects manual language instead of OS locale")
 	check(app.progress.completed==expected_completed and app.progress.left_handed and not app.progress.sound,"Restart preserves non-language fields")

@@ -1,0 +1,30 @@
+plugins { id 'com.android.library' version '8.7.3' }
+
+def auth = new Properties()
+def configFile = file('google.properties')
+if (configFile.exists()) configFile.withInputStream { auth.load(it) }
+def quoted = { String value -> '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"' }
+
+android {
+    namespace 'org.wx0823.eatall.google'
+    compileSdk 35
+    defaultConfig {
+        minSdk 24
+        buildConfigField 'String', 'WEB_CLIENT_ID', quoted(auth.getProperty('web_client_id', ''))
+        buildConfigField 'String', 'AUTH_ENDPOINT', quoted(auth.getProperty('auth_endpoint', ''))
+        buildConfigField 'String', 'GAMES_APP_ID', quoted(auth.getProperty('games_app_id', ''))
+        resValue 'string', 'eatall_games_app_id', auth.getProperty('games_app_id', '')
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+    buildFeatures { buildConfig true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies {
+    if (project.hasProperty('godotCompileJar')) {
+        compileOnly files(project.property('godotCompileJar'))
+        implementation 'androidx.fragment:fragment:1.8.6'
+    } else {
+        compileOnly 'org.godotengine:godot:4.5.1.stable'
+    }
+    implementation 'com.google.android.gms:play-services-games-v2:22.1.0'
+}

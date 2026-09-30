@@ -1,0 +1,3 @@
+10-01 01:17:19.966  2088  2088 I GodotPluginRegistry: Initializing Godot plugin EatAllGoogle
+10-01 01:17:19.966  2088  2088 I GodotPluginRegistry: Completed initialization for Godot plugin EatAllGoogle
+10-01 01:17:20.202  2088  2117 E godot   : ERROR: FeedShaderGLES3: Fragment shader compilation failed:

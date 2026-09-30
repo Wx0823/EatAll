@@ -1,0 +1,11 @@
+Google sign-in button brand assets, fetched 2026-10-01.
+G logo: https://developers.google.com/static/identity/images/g-logo.png
+Usage restricted to the Google sign-in button under:
+https://developers.google.com/identity/branding-guidelines
+Logo retained unmodified, full color, original aspect ratio, white background.
+
+Google Sans variable font:
+https://github.com/google/fonts/tree/main/ofl/googlesans
+GoogleSans[GRAD,opsz,wght].ttf renamed GoogleSans.ttf without font modification.
+SIL Open Font License: OFL.txt. Weight 500 used for Google button.
+Bundled Noto Sans CJK is the fallback for localized Chinese labels.

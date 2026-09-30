@@ -1,0 +1,4 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+MULTI_FOOD_CONTACT mouth=swallow cursor=1 visible_fruit=1
+FALL_FOOD_QA checks=44 failures=0

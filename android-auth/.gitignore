@@ -1,0 +1,5 @@
+.gradle/
+build/
+local.properties
+google.properties
+backend/.venv/

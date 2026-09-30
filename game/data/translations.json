@@ -82,7 +82,20 @@
     "level.11.title": "留条回家的路",
     "level.11.hint": "点心越多身体越长，提前给转弯留空间。",
     "level.12.title": "一口气全吃完",
-    "level.12.hint": "先吃上层，再计划落地，绕开尖刺回家。"
+    "level.12.hint": "先吃上层，再计划落地，绕开尖刺回家。",
+    "account.google": "Google 玩家",
+    "login.unavailable": "Google 登录暂未开放，请先使用游客登录。",
+    "login.retry": "暂时无法登录，请稍后重试或使用游客登录。",
+    "account.sign_out": "退出登录",
+    "lobby.enter": "进入关卡   →",
+    "login.title": "登录",
+    "login.google": "使用 Google 登录",
+    "login.guest": "游客登录",
+    "account.guest": "游客",
+    "login.save_failed": "无法保存登录选择，下次启动需要重新登录。",
+    "account.local": "关卡进度保存在这台设备上。退出登录不会清除进度。",
+    "login.pending": "正在登录，请稍候…",
+    "login.cancel": "取消"
   },
   "zh_TW": {
     "home.caption": "小小點心 · 大大腦洞",
@@ -167,7 +180,20 @@
     "level.11.title": "留條回家的路",
     "level.11.hint": "點心越多身體越長，提前給轉彎留空間。",
     "level.12.title": "一口氣全吃完",
-    "level.12.hint": "先吃上層，再計畫落地，繞開尖刺回家。"
+    "level.12.hint": "先吃上層，再計畫落地，繞開尖刺回家。",
+    "account.google": "Google 玩家",
+    "login.unavailable": "Google 登入暫未開放，請先使用訪客登入。",
+    "login.retry": "暫時無法登入，請稍後重試或使用訪客登入。",
+    "account.sign_out": "登出",
+    "lobby.enter": "進入關卡   →",
+    "login.title": "登入",
+    "login.google": "使用 Google 登入",
+    "login.guest": "訪客登入",
+    "account.guest": "訪客",
+    "login.save_failed": "無法儲存登入選擇，下次啟動需要重新登入。",
+    "account.local": "關卡進度儲存在這台裝置上。登出不會清除進度。",
+    "login.pending": "正在登入，請稍候…",
+    "login.cancel": "取消"
   },
   "en": {
     "home.caption": "TINY BITES · BIG IDEAS",
@@ -252,6 +278,19 @@
     "level.11.title": "A Way Back",
     "level.11.hint": "More treats, longer body. Leave room to turn.",
     "level.12.title": "Gobble Them All",
-    "level.12.hint": "Snack up top, plan your fall, and dodge the spikes."
+    "level.12.hint": "Snack up top, plan your fall, and dodge the spikes.",
+    "account.google": "Google Player",
+    "login.unavailable": "Google sign-in is not available yet. Please play as a guest.",
+    "login.retry": "Unable to sign in. Try again or play as a guest.",
+    "account.sign_out": "Sign out",
+    "lobby.enter": "Play   →",
+    "login.title": "Sign in",
+    "login.google": "Sign in with Google",
+    "login.guest": "Play as Guest",
+    "account.guest": "Guest",
+    "login.save_failed": "Could not save your choice. Sign in again next time.",
+    "account.local": "Progress is saved on this device. Signing out will not erase it.",
+    "login.pending": "Signing in…",
+    "login.cancel": "Cancel"
   }
 }

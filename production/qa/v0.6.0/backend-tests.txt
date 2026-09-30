@@ -1,0 +1,15 @@
+test_exchange_checks_audience_using_official_verifier (test_server.ExchangeTests.test_exchange_checks_audience_using_official_verifier) ... ok
+test_google_certificate_fetch_timeout_is_bounded (test_server.ExchangeTests.test_google_certificate_fetch_timeout_is_bounded) ... ok
+test_google_rejecting_code_is_not_success (test_server.ExchangeTests.test_google_rejecting_code_is_not_success) ... ok
+test_hybrid_presenter_requires_explicit_allowlist (test_server.ExchangeTests.test_hybrid_presenter_requires_explicit_allowlist) ... ok
+test_invalid_request_never_reaches_google (test_server.ExchangeTests.test_invalid_request_never_reaches_google) ... ok
+test_logout_invalidates_server_session (test_server.ExchangeTests.test_logout_invalidates_server_session) ... ok
+test_no_google_identity_before_verified (test_server.ExchangeTests.test_no_google_identity_before_verified) ... ok
+test_pgs_access_token_alone_is_not_game_identity (test_server.ExchangeTests.test_pgs_access_token_alone_is_not_game_identity) ... ok
+test_server_exception_not_leaked (test_server.ExchangeTests.test_server_exception_not_leaked) ... ok
+test_verified_subject_gets_short_session_and_request_binding (test_server.ExchangeTests.test_verified_subject_gets_short_session_and_request_binding) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.059s
+
+OK

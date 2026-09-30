@@ -108,6 +108,15 @@
 
 v0.5.1首次普通am start -W等待时，ActivityManager明确以remove task终止新应用进程。force-stop后用NEW_TASK|CLEAR_TASK的am start -f 0x10008000重新启动成功，原生截图确认实界面、存档保持；仅清理任务栈，不用pm clear清用户数据。只确认本机模拟器任务移除，不把系统内部根因或真实手机启动问题当已解决。证据与限制见production/qa/v0.5.1/delivery.md、verification.txt；已有FeedShaderGLES3遗留状态不变。
 
+## EA-L010：Android Gradle 模板必须隔离，构建进程必须有退出边界
+
+- 日期/场景：2026-10-01，首次把Google原生插件加入Godot Android包。
+- 现象/确定原因：Godot导出已结束而Windows console wrapper仍等待；结束本任务Gradle daemon后立即继续完成Windows导出，表明存活daemon影响退出（继承输出句柄为当前解释）。后续导出发现android/build生成资源被再次扫描及icon.png.import被AAPT当Android资源，构建目录未放.gdignore为直接原因。
+- 措施：tools/build.ps1设置org.gradle.daemon=false；game/android/.gdignore与导出排除android/addons目录，清理只位于已核实模板目录内的误生成.import文件。原生插件构建独立限时300秒，Windows等待前保留进程Handle以取得实际退出码。
+- 验证：以production/qa/v0.6.0/delivery.md记录的最终重新构建、包体检查、退出码与安装结果为准；不把早期产生APK当作完整构建成功。未测其他主机，SDK XML版本警告仍保留。
+- 身份接入补充：本轮服务端审查纠正azp可为Android OAuth客户端的情况；依据官方OIDC规范用Web/Android允许列表，加入正反例；mock测试不能冒充真实Google联调。Google中文fallback再次显现默认细字重，明确设FontVariation500并实际三语图审，延续EA-L004检查项。
+- 主理人整合并复核；上述本机构建修正不能解释此前所有模型长时间停顿，不宣称平台问题根治。
+
 ## 后续条目的最小内容
 
 `编号/日期 → 触发场景 → 现象 → 原因及确定程度 → 实际措施 → 验证证据 → 遗留/责任 → 状态`

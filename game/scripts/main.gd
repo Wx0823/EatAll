@@ -11,6 +11,9 @@ const MEADOW = preload("res://assets/art-v2/meadow.png")
 const HOME_MONSTER = preload("res://assets/art-v2/home-monster.png")
 const UNDO_ICON = preload("res://assets/ui-v5/undo.svg")
 const FOOD_ATLAS = preload("res://assets/art-v2/gameplay-atlas.png")
+const Auth = preload("res://scripts/auth_controller.gd")
+const IdleMonster = preload("res://scripts/idle_monster.gd")
+const GoogleButton = preload("res://scripts/google_button.gd")
 const INK := Color("4d2543")
 const CORAL := Color("f87961")
 const CREAM := Color("fff3da")
@@ -20,6 +23,9 @@ const FALL_ACCELERATION := 160.0 # Grid cells / second²; one continuous fall.
 const MAX_FRAME_CARRY := 0.08 # Long stalls never fast-forward extra grid actions.
 
 var save_path := "user://progress.json"
+var auth_path := ""
+var auth: Node
+var auth_error_code := ""
 var qa_mode := false
 var skip_animations := false
 var levels: Array = []
@@ -101,6 +107,13 @@ func _ready() -> void:
 	resized.connect(_layout)
 	get_tree().auto_accept_quit = false
 	get_tree().quit_on_go_back = false
+	auth = Auth.new()
+	auth.save_path = auth_path if not auth_path.is_empty() else (save_path.get_basename()+"-login.json" if qa_mode else "user://login.json")
+	auth.authenticated.connect(_show_home)
+	auth.signed_out.connect(_show_login)
+	auth.failed.connect(_auth_failed)
+	auth.busy_changed.connect(_auth_busy_changed)
+	add_child(auth)
 	_show_home()
 	if OS.is_debug_build() and FileAccess.file_exists("user://qa/frame-probe.enabled"):
 		var probe := preload("res://scripts/frame_probe.gd").new()
@@ -207,6 +220,10 @@ func _reset_input() -> void:
 		stick.reset()
 
 func _close_overlay() -> void:
+	if overlay_kind == "auth_pending" and is_instance_valid(auth) and auth.busy:
+		overlay_kind = ""
+		auth.sign_out()
+		return
 	_clear(overlay)
 	overlay_kind = ""
 	paused = false
@@ -217,6 +234,9 @@ func _close_overlay() -> void:
 	_reset_input()
 
 func _show_home() -> void:
+	if not auth.is_authenticated():
+		_show_login()
+		return
 	_cancel_animation()
 	_reset_input()
 	_close_overlay()
@@ -234,6 +254,35 @@ func _show_home() -> void:
 	subtitle.add_theme_color_override("font_outline_color", Color("fff1ce"))
 	subtitle.add_theme_constant_override("outline_size", 5)
 	subtitle.name = "Subtitle"
+	var hero := IdleMonster.new()
+	hero.name = "Hero"
+	content.add_child(hero)
+	var account := _button(content, _t("account."+auth.provider), _account_panel, CREAM, 14)
+	account.name = "Account"
+	var start := _button(content, _t("lobby.enter"), start_level.bind(_next_level()), CORAL, 22)
+	start.name = "Start"
+	var select := _button(content, _t("home.levels"), show_levels, CREAM)
+	select.name = "Select"
+	var settings := _button(content, _t("home.settings"), _settings, MINT, 16)
+	settings.name = "Settings"
+	_layout()
+
+func _show_login() -> void:
+	_cancel_animation()
+	_reset_input()
+	_close_overlay()
+	_clear(content)
+	mode = "login"
+	board = null
+	stick = null
+	var title := _label(content, _t("home.title"), 61, INK, true)
+	title.name = "Title"
+	title.add_theme_color_override("font_outline_color", CREAM)
+	title.add_theme_constant_override("outline_size", 8)
+	var subtitle := _label(content, _t("home.subtitle"), 26, Color("d96b4c"), true)
+	subtitle.name = "Subtitle"
+	subtitle.add_theme_color_override("font_outline_color", CREAM)
+	subtitle.add_theme_constant_override("outline_size", 4)
 	var hero := TextureRect.new()
 	hero.texture = HOME_MONSTER
 	hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -241,13 +290,57 @@ func _show_home() -> void:
 	hero.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hero.name = "Hero"
 	content.add_child(hero)
-	var start := _button(content, _t("home.start" if progress.completed.is_empty() else "home.continue"), start_level.bind(_next_level()), CORAL, 22)
-	start.name = "Start"
-	var select := _button(content, _t("home.levels"), show_levels, CREAM)
-	select.name = "Select"
-	var settings := _button(content, _t("home.settings"), _settings, MINT, 16)
+	var google := GoogleButton.new()
+	google.name = "Google"
+	google.text = _t("login.google")
+	google.pressed.connect(func(): auth.sign_in_google.call_deferred())
+	content.add_child(google)
+	var guest := _button(content, _t("login.guest"), auth.login_guest, CREAM, 19)
+	guest.name = "Guest"
+	var settings := _button(content, _t("home.settings"), _settings, MINT, 14)
 	settings.name = "Settings"
+	_auth_busy_changed()
 	_layout()
+
+func _auth_busy_changed() -> void:
+	if mode != "login" or not is_instance_valid(content):
+		return
+	for key in ["Google", "Guest"]:
+		var button := content.get_node_or_null(key) as Button
+		if button: button.disabled = auth.busy
+	if auth.busy:
+		var panel := _panel(_t("login.title"), _t("login.pending"), 270)
+		overlay_kind = "auth_pending"
+		var cancel := _button(panel, _t("login.cancel"), _close_overlay, CREAM)
+		cancel.name = "Cancel"
+		_rect(cancel, 25, 180, panel.size.x-50, 54)
+	elif overlay_kind == "auth_pending":
+		_close_overlay()
+
+func _auth_failed(code: String) -> void:
+	auth_error_code = code
+	var message := "login.unavailable"
+	if code == "cancelled":
+		return
+	if code == "save_failed": message = "login.save_failed"
+	elif code != "not_configured": message = "login.retry"
+	var panel := _panel(_t("login.title"), _t(message), 270)
+	overlay_kind = "auth_error"
+	var done := _button(panel, _t("settings.done"), _close_overlay, CORAL)
+	done.name = "Done"
+	_rect(done, 25, 180, panel.size.x-50, 54)
+
+func _account_panel() -> void:
+	if not auth.is_authenticated():
+		return
+	var panel := _panel(_t("account."+auth.provider), _t("account.local"), 310)
+	overlay_kind = "account"
+	var signout := _button(panel, _t("account.sign_out"), auth.sign_out, CREAM)
+	signout.name = "SignOut"
+	_rect(signout, 25, 166, panel.size.x-50, 52)
+	var done := _button(panel, _t("settings.done"), _close_overlay, MINT)
+	done.name = "Done"
+	_rect(done, 25, 231, panel.size.x-50, 52)
 
 func _next_level() -> int:
 	for i in levels.size():
@@ -262,6 +355,9 @@ func _unlocked() -> int:
 	return mini(last, levels.size() - 1)
 
 func show_levels() -> void:
+	if not auth.is_authenticated():
+		_show_login()
+		return
 	_cancel_animation()
 	_reset_input()
 	_close_overlay()
@@ -281,13 +377,12 @@ func show_levels() -> void:
 		b.name = "Level%d" % i
 		b.disabled = i > _unlocked()
 		b.tooltip_text = _level_title(i) if not b.disabled else _t("levels.locked")
-	var note := _label(content, _t("levels.note"), 15, Color("826d78"), true)
-	note.add_theme_color_override("font_outline_color", CREAM)
-	note.add_theme_constant_override("outline_size", 4)
-	note.name = "Footer"
 	_layout()
 
 func start_level(index: int) -> void:
+	if not auth.is_authenticated():
+		_show_login()
+		return
 	if index < 0 or index >= levels.size():
 		return
 	_cancel_animation()
@@ -357,7 +452,15 @@ func _layout() -> void:
 			bottom = maxf(16.0, (screen.y - safe.end.y) * h / screen.y + 8)
 	layout_top = top
 	layout_bottom = bottom
-	if mode == "home":
+	if mode == "login":
+		_rect(content.get_node("Title"), 20, top+40, w-40, 86)
+		_rect(content.get_node("Subtitle"), 20, top+120, w-40, 39)
+		_rect(content.get_node("Hero"), 18, top+171, w-36, maxf(140, h-top-bottom-433))
+		_rect(content.get_node("Google"), 60, h-bottom-206, w-120, 48)
+		_rect(content.get_node("Guest"), 57, h-bottom-143, w-114, 60)
+		_rect(content.get_node("Settings"), (w-120)*0.5, h-bottom-62, 120, 44)
+	elif mode == "home":
+		_rect(content.get_node("Account"), 28, top+2, 130, 44)
 		_rect(content.get_node("Title"), 20, top+56, w-40, 86)
 		_rect(content.get_node("Subtitle"), 20, top+136, w-40, 39)
 		_rect(content.get_node("Hero"), 18, top+184, w-36, maxf(168, h-top-bottom-434))
@@ -372,7 +475,6 @@ func _layout() -> void:
 		var bh := minf(93, (h-top-bottom-228)/4.0)
 		for i in levels.size():
 			_rect(content.get_node("Level%d" % i), 28 + (i%3)*(bw+16), top+132+(i/3)*(bh+18), bw, bh)
-		_rect(content.get_node("Footer"), 12, h-bottom-54, w-24, 40)
 	elif mode == "play" and is_instance_valid(board):
 		_rect(content.get_node("Tag"), 33, top-2, w-118, 18)
 		_layout_play_title()
@@ -693,7 +795,8 @@ func _show_pause_panel() -> void:
 	_rect(levels_b, 42+(panel.size.x-68)*0.6, 170, (panel.size.x-68)*0.4, 49)
 
 func _settings() -> void:
-	var panel := _panel(_t("settings.title"), _t("settings.description"), 437)
+	var logged_in: bool = auth.is_authenticated()
+	var panel := _panel(_t("settings.title"), _t("settings.description"), 502 if logged_in else 437)
 	overlay_kind = "settings"
 	var hand := _button(panel, _t("settings.hand", [_t("settings.right_hand" if progress.left_handed else "settings.left_hand")]), _toggle_hand, CREAM, 17)
 	hand.name = "Hand"
@@ -705,9 +808,13 @@ func _settings() -> void:
 	var language_button := _button(panel, _t("settings.language", [selected_name]), _language_settings, CREAM, 17)
 	language_button.name = "Language"
 	_rect(language_button, 25, 277, panel.size.x-50, 51)
+	if logged_in:
+		var signout := _button(panel, _t("account.sign_out"), _account_panel, CREAM, 17)
+		signout.name = "SignOut"
+		_rect(signout, 25, 343, panel.size.x-50, 51)
 	var back := _button(panel, _t("settings.done"), _close_overlay, CORAL)
 	back.name = "Done"
-	_rect(back, 25, 350, panel.size.x-50, 52)
+	_rect(back, 25, 415 if logged_in else 350, panel.size.x-50, 52)
 
 func _language_settings() -> void:
 	var panel := _panel(_t("settings.language_title"), _t("settings.language_description"), 465)
@@ -748,14 +855,17 @@ func _localize_direction_keys() -> void:
 func _refresh_texts() -> void:
 	if not is_instance_valid(content):
 		return
-	if mode == "home":
-		var home_keys := {"Title":"home.title", "Subtitle":"home.subtitle", "Start":"home.start" if progress.completed.is_empty() else "home.continue", "Select":"home.levels", "Settings":"home.settings"}
+	if mode == "login":
+		var login_keys := {"Title":"home.title", "Subtitle":"home.subtitle", "Google":"login.google", "Guest":"login.guest", "Settings":"home.settings"}
+		for node_name in login_keys:
+			content.get_node(node_name).text = _t(login_keys[node_name])
+	elif mode == "home":
+		var home_keys := {"Title":"home.title", "Subtitle":"home.subtitle", "Start":"lobby.enter", "Select":"home.levels", "Settings":"home.settings", "Account":"account."+auth.provider}
 		for name_key in home_keys:
 			content.get_node(name_key).text = _t(home_keys[name_key])
 	elif mode == "select":
 		content.get_node("Title").text = _t("levels.title")
 		content.get_node("Subtitle").text = _t("levels.completed", [progress.completed.size()])
-		content.get_node("Footer").text = _t("levels.note")
 		for i in levels.size():
 			var button: Button = content.get_node("Level%d" % i)
 			button.tooltip_text = _level_title(i) if not button.disabled else _t("levels.locked")
@@ -773,6 +883,9 @@ func _refresh_texts() -> void:
 		"language": _language_settings()
 		"pause": _show_pause_panel()
 		"end": _end_panel(state.status == "won")
+		"account": _account_panel()
+		"auth_error": _auth_failed(auth_error_code)
+		"auth_pending": _auth_busy_changed()
 
 func _toggle_hand() -> void:
 	progress.left_handed = not progress.left_handed
@@ -817,7 +930,8 @@ func _notification(what: int) -> void:
 		if mode == "play" and is_instance_valid(content):
 			pause_game()
 	elif what == NOTIFICATION_WM_GO_BACK_REQUEST:
-		if mode == "play": pause_game()
+		if paused: _close_overlay()
+		elif mode == "play": pause_game()
 		else: _show_home()
 	elif what == NOTIFICATION_WM_CLOSE_REQUEST:
 		get_tree().quit()
@@ -828,6 +942,8 @@ func _draw() -> void:
 	draw_texture_rect(MEADOW, Rect2((size-bg_size)*0.5, bg_size), false)
 	if mode == "home":
 		draw_style_box(UiSkin.panel("cream"), Rect2(37, size.y-layout_bottom-218, size.x-74, 187))
+	elif mode == "login":
+		draw_style_box(UiSkin.panel("cream"), Rect2(37, size.y-layout_bottom-228, size.x-74, 163))
 	if mode == "play" or mode == "select":
 		draw_style_box(UiSkin.panel("cream"), Rect2(15, layout_top-10, size.x-30, 119 if mode == "play" else 123))
 	if mode == "play":

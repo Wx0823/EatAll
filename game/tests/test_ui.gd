@@ -52,11 +52,15 @@ func run() -> void:
 	game = Main.new()
 	game.qa_mode = true
 	game.save_path = test_path
+	game.auth_path = test_path + ".auth"
 	root.add_child(game)
 	game.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	await process_frame
 	await process_frame
-	check(game.mode == "home", "application opens home")
+	check(game.mode == "login", "fresh application opens login")
+	tap(game.content.get_node("Guest"))
+	await process_frame
+	check(game.mode == "home", "native guest button enters lobby")
 	check(not quit_on_go_back, "Android back does not auto-quit SceneTree")
 	check(game.save_path != "user://progress.json", "isolated save path")
 	check(Input.emulate_mouse_from_touch, "project enables native touch-to-button mouse emulation")
@@ -226,7 +230,7 @@ func run() -> void:
 	var recovered: Dictionary = Progress.load_data(recovery_path, 12)
 	check(recovered.recovered and recovered.data.completed == [0], "corrupt primary recovers previous valid backup")
 	check(not Progress.save_data(recovery_path + "/child.json", data), "invalid parent path reports save failure")
-	for base in [test_path, recovery_path]:
+	for base in [test_path, recovery_path, test_path + ".auth"]:
 		for suffix in ["", ".bak", ".tmp"]:
 			var path: String = base + suffix
 			if FileAccess.file_exists(path):

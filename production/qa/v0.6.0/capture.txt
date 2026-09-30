@@ -1,0 +1,44 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+OpenGL API 3.3.0 NVIDIA 616.56 - Compatibility - Using Device: NVIDIA - NVIDIA GeForce RTX 5060 Ti
+
+CAPTURE zh_CN-480-01-login.png
+CAPTURE zh_CN-480-02-google-unavailable.png
+CAPTURE zh_CN-480-03-lobby.png
+CAPTURE zh_CN-480-03b-idle.png
+CAPTURE zh_CN-480-04-settings.png
+CAPTURE zh_CN-480-04b-account.png
+CAPTURE zh_CN-480-05-levels.png
+CAPTURE zh_TW-480-01-login.png
+CAPTURE zh_TW-480-02-google-unavailable.png
+CAPTURE zh_TW-480-03-lobby.png
+CAPTURE zh_TW-480-04-settings.png
+CAPTURE zh_TW-480-04b-account.png
+CAPTURE zh_TW-480-05-levels.png
+CAPTURE en-480-01-login.png
+CAPTURE en-480-02-google-unavailable.png
+CAPTURE en-480-03-lobby.png
+CAPTURE en-480-04-settings.png
+CAPTURE en-480-04b-account.png
+CAPTURE en-480-05-levels.png
+CAPTURE zh_CN-390-01-login.png
+CAPTURE zh_CN-390-02-google-unavailable.png
+CAPTURE zh_CN-390-02b-google-pending-stub.png
+CAPTURE zh_CN-390-03-lobby.png
+CAPTURE zh_CN-390-04-settings.png
+CAPTURE zh_CN-390-04b-account.png
+CAPTURE zh_CN-390-05-levels.png
+CAPTURE zh_TW-390-01-login.png
+CAPTURE zh_TW-390-02-google-unavailable.png
+CAPTURE zh_TW-390-02b-google-pending-stub.png
+CAPTURE zh_TW-390-03-lobby.png
+CAPTURE zh_TW-390-04-settings.png
+CAPTURE zh_TW-390-04b-account.png
+CAPTURE zh_TW-390-05-levels.png
+CAPTURE en-390-01-login.png
+CAPTURE en-390-02-google-unavailable.png
+CAPTURE en-390-02b-google-pending-stub.png
+CAPTURE en-390-03-lobby.png
+CAPTURE en-390-04-settings.png
+CAPTURE en-390-04b-account.png
+CAPTURE en-390-05-levels.png
+LOGIN_CAPTURE captures=40 failures=0

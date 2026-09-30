@@ -1,0 +1,1 @@
+-keep class org.wx0823.eatall.google.EatAllGoogle { *; }

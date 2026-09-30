@@ -9,6 +9,7 @@ func run() -> void:
 	app.qa_mode = true
 	app.save_path = "user://qa/responsiveness.json"
 	root.add_child(app)
+	app.auth.login_guest()
 	app.set_process(false)
 	app.audio.enabled = false
 	var floor_tiles: Array = []

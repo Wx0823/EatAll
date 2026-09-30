@@ -114,6 +114,7 @@ func run()->void:
 	app.qa_mode=true
 	app.save_path="user://qa/direction-pad.json"
 	root.add_child(app)
+	app.auth.login_guest()
 	app.audio.enabled=false
 	var floor_tiles:Array=[]
 	for x in range(30):floor_tiles.append(Vector2i(x,6))

@@ -71,6 +71,7 @@ func run()->void:
 	app.qa_mode=true
 	app.save_path="user://qa/fall-food.json"
 	root.add_child(app)
+	app.auth.login_guest()
 	app.set_process(false)
 	app.audio.enabled=false
 	app.skip_animations=true

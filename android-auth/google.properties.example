@@ -1,0 +1,5 @@
+# Public IDs only. Copy to ignored google.properties. NEVER add a client secret.
+games_app_id=
+web_client_id=
+# HTTPS endpoint, e.g. https://your-owned-domain.example/auth/google
+auth_endpoint=
