@@ -3,8 +3,10 @@ EatAll v0.2 assets and dependencies
 The art-v2 backgrounds, character illustrations and sprites are AI-generated
 with the built-in ImageGen tool for this project, using its approved concept
 as reference. Prompts and provenance: design/art/production-v02.md.
-Continuous body geometry, UI skins and sound effects are generated at runtime
-by this project's code. No assets are extracted from the reference game video.
+Continuous body geometry and sound effects are generated at runtime
+by this project's code. ui-v5 buttons and direction keys are AI-generated
+with the built-in ImageGen tool; prompts and crop/nine-patch specifications:
+design/art/ui-v05.md. No assets are extracted from the reference game video.
 AI-generated concept images in design/art/concepts are design references and are
 not bundled as runtime game assets.
 

@@ -17,7 +17,7 @@ func capture() -> void:
 	var touch := InputEventScreenTouch.new()
 	touch.index=0
 	touch.pressed=true
-	touch.position=app.stick.global_position+app.stick.size*.5+Vector2(38,0)
+	touch.position=app.stick.button_center(Vector2i.RIGHT)
 	Input.parse_input_event(touch)
 	Input.flush_buffered_events()
 	advance(0.07)

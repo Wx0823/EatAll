@@ -1,0 +1,74 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+[   0% ] [90m[1mfirst_scan_filesystem[22m | Started 项目初始化 (5 steps)[39m[0m
+[   0% ] [90m[1mfirst_scan_filesystem[22m | 正在扫描文件结构……[39m[0m
+[  16% ] [90m[1mfirst_scan_filesystem[22m | 正在加载全局类名……[39m[0m
+[  33% ] [90m[1mfirst_scan_filesystem[22m | 正在校验 GDExtension……[39m[0m
+[  50% ] [90m[1mfirst_scan_filesystem[22m | 正在创建自动加载脚本……[39m[0m
+[  66% ] [90m[1mfirst_scan_filesystem[22m | 正在初始化插件……[39m[0m
+[  83% ] [90m[1mfirst_scan_filesystem[22m | 正在启动文件扫描……[39m[0m
+[92m[ DONE ][39m [1mfirst_scan_filesystem[22m
+[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | Started 正在注册全局类…… (6 steps)[39m[0m
+[   0% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  14% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  28% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  42% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  57% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[  71% ] [90m[1mupdate_scripts_classes[22m | [39m[0m
+[92m[ DONE ][39m [1mupdate_scripts_classes[22m
+[0m
+[   0% ] [90m[1mloading_editor_layout[22m | Started 正在加载编辑器 (5 steps)[39m[0m
+[   0% ] [90m[1mloading_editor_layout[22m | 正在加载编辑器布局……[39m[0m
+[92m[ DONE ][39m [1mloading_editor_layout[22m
+[0m
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+REPLAY EA-01: WON, moves=3, fallen_cells=0, solution=RRR
+REPLAY EA-02: WON, moves=5, fallen_cells=0, solution=RRRRR
+REPLAY EA-03: WON, moves=4, fallen_cells=1, solution=URRR
+REPLAY EA-04: WON, moves=5, fallen_cells=2, solution=UURRR
+REPLAY EA-05: WON, moves=8, fallen_cells=2, solution=ULURRRRR
+REPLAY EA-06: WON, moves=5, fallen_cells=4, solution=RRURD
+REPLAY EA-07: WON, moves=5, fallen_cells=0, solution=RURRD
+REPLAY EA-08: WON, moves=7, fallen_cells=0, solution=RRRRURD
+REPLAY EA-09: WON, moves=10, fallen_cells=0, solution=RRDDLDDDLL
+REPLAY EA-10: WON, moves=5, fallen_cells=0, solution=RURUR
+REPLAY EA-11: WON, moves=18, fallen_cells=0, solution=UURRDRRDRUULLLLLDL
+REPLAY EA-12: WON, moves=15, fallen_cells=6, solution=RRUURRULLDDDLLL
+RULES RESULT: 412 checks, 0 failures
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+QA_LEVEL id=1 steps=3 status=won
+QA_LEVEL id=2 steps=5 status=won
+QA_LEVEL id=3 steps=4 status=won
+QA_LEVEL id=4 steps=5 status=won
+QA_LEVEL id=5 steps=8 status=won
+QA_LEVEL id=6 steps=5 status=won
+QA_LEVEL id=7 steps=5 status=won
+QA_LEVEL id=8 steps=7 status=won
+QA_LEVEL id=9 steps=10 status=won
+QA_LEVEL id=10 steps=5 status=won
+QA_LEVEL id=11 steps=18 status=won
+QA_LEVEL id=12 steps=15 status=won
+INDEPENDENT_QA checks=539 failures=0
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+INDEPENDENT_UI_QA checks=141 failures=0
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+CADENCE dt=0.01 accepted starts seconds=[0.0, 0.16, 0.32, 0.48, 0.64, 0.8, 0.96, 1.12, 1.28, 1.44, 1.6, 1.76, 1.92]
+CADENCE dt=1/60 accepted starts seconds=[0.0, 0.1667, 0.3333, 0.4833, 0.65, 0.8167, 0.9667, 1.1333, 1.2833, 1.45, 1.6167, 1.7667, 1.9333]
+FALL head y at 40ms spacing=[3.0, 3.12800002098084, 3.51200008392334, 4.15199995040894, 5.04800033569336]
+MOTION REVIEW checks=73 failures=0
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+VARIABLE_BOUNDARIES [time, rendered x, committed x, override size]=[[0.168, 3.04999995231628, 4, 3], [0.328, 4.05000019073486, 5, 3], [0.485, 5.03125, 6, 3], [0.652, 6.07499980926514, 7, 3], [0.806, 7.03749990463257, 8, 3], [0.964, 8.02499961853027, 9, 3], [1.137, 9.10624980926514, 10, 3], [1.288, 10.0500001907349, 11, 3], [1.456, 11.1000003814697, 12, 3], [1.608, 12.0500001907349, 13, 3]]
+RESPONSIVENESS checks=321 failures=0
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+MULTI_FOOD_CONTACT mouth=swallow cursor=1 visible_fruit=1
+FALL_FOOD_QA checks=44 failures=0
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+
+DIRECTION_PAD_QA checks=75 failures=0

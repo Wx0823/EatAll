@@ -2,7 +2,7 @@ extends Control
 
 const Rules = preload("res://scripts/rules.gd")
 const Board = preload("res://scripts/board_renderer.gd")
-const Stick = preload("res://scripts/virtual_stick.gd")
+const Stick = preload("res://scripts/direction_pad.gd")
 const Progress = preload("res://scripts/progress.gd")
 const Sounds = preload("res://scripts/sfx.gd")
 const UiSkin = preload("res://scripts/ui_skin.gd")
@@ -56,6 +56,8 @@ var animation_continuous := false
 var status_time := 0.0
 var fail_reason := ""
 var terminal_delay := 0.0
+var layout_top := 24.0
+var layout_bottom := 20.0
 
 func _ready() -> void:
 	qa_mode = qa_mode or OS.get_cmdline_user_args().has("--qa")
@@ -63,7 +65,7 @@ func _ready() -> void:
 		save_path = "user://qa/ui-progress.json"
 	var readable_font := FontVariation.new()
 	readable_font.base_font = load("res://assets/NotoSansSC.ttf")
-	readable_font.variation_opentype = {2003265652: 600.0} # OpenType 'wght' integer tag.
+	readable_font.variation_opentype = {2003265652: 700.0} # OpenType 'wght' integer tag.
 	font = readable_font
 	var theme := Theme.new()
 	theme.default_font = font
@@ -101,20 +103,6 @@ func _ready() -> void:
 		probe.game = self
 		add_child(probe)
 
-func _style(fill: Color, border: Color = Color.TRANSPARENT, radius: int = 18, shadow: bool = false) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = fill
-	s.border_color = border
-	s.set_border_width_all(2 if border.a > 0 else 0)
-	s.set_corner_radius_all(radius)
-	s.content_margin_left = 14
-	s.content_margin_right = 14
-	if shadow:
-		s.shadow_color = Color(0.25, 0.12, 0.19, 0.14)
-		s.shadow_offset = Vector2(0, 5)
-		s.shadow_size = 0
-	return s
-
 func _label(parent: Node, text: String, font_size: int, color: Color = INK, center: bool = false) -> Label:
 	var label := Label.new()
 	label.text = text
@@ -131,14 +119,17 @@ func _button(parent: Node, text: String, action: Callable, fill: Color = CREAM, 
 	b.text = text
 	b.focus_mode = Control.FOCUS_NONE
 	b.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	b.add_theme_stylebox_override("normal", UiSkin.button(fill))
-	b.add_theme_stylebox_override("hover", UiSkin.button(fill.lightened(0.05)))
-	b.add_theme_stylebox_override("pressed", UiSkin.button(fill.darkened(0.07), true))
-	b.add_theme_stylebox_override("disabled", UiSkin.button(Color("e7e0d2"), false, true))
+	var icon_key := text in ["Ⅱ", "←"]
+	b.add_theme_stylebox_override("normal", UiSkin.dpad_key() if icon_key else UiSkin.button(fill))
+	b.add_theme_stylebox_override("hover", UiSkin.dpad_key() if icon_key else UiSkin.button(fill.lightened(0.05)))
+	b.add_theme_stylebox_override("pressed", UiSkin.dpad_key(true) if icon_key else UiSkin.button(fill.darkened(0.07), true))
+	b.add_theme_stylebox_override("disabled", UiSkin.dpad_key(false, true) if icon_key else UiSkin.button(Color("e7e0d2"), false, true))
 	b.add_theme_color_override("font_color", INK)
 	b.add_theme_color_override("font_hover_color", INK)
 	b.add_theme_color_override("font_pressed_color", INK)
-	b.add_theme_color_override("font_disabled_color", Color("aea3a4"))
+	b.add_theme_color_override("font_disabled_color", Color("8b7c75"))
+	b.add_theme_color_override("font_shadow_color", Color(1.0, 0.97, 0.85, 0.65))
+	b.add_theme_constant_override("shadow_offset_y", -1)
 	b.add_theme_font_size_override("font_size", font_size)
 	# Finish input dispatch before replacing any Control nodes in the tree.
 	b.pressed.connect(func(): action.call_deferred())
@@ -247,6 +238,8 @@ func show_levels() -> void:
 		b.disabled = i > _unlocked()
 		b.tooltip_text = levels[i].title if not b.disabled else "完成前一关解锁"
 	var note := _label(content, "慢慢想，放心试。每一步都能撤销。", 15, Color("826d78"), true)
+	note.add_theme_color_override("font_outline_color", CREAM)
+	note.add_theme_constant_override("outline_size", 4)
 	note.name = "Footer"
 	_layout()
 
@@ -262,9 +255,11 @@ func start_level(index: int) -> void:
 	state = Rules.initial_state(levels[index])
 	history.clear()
 	fail_reason = ""
-	var tag := _label(content, "烘焙野餐    /    %02d" % (index + 1), 12, Color("95717e"))
+	var tag := _label(content, "烘焙野餐   /   %02d" % (index + 1), 12, Color("8b5769"))
 	tag.name = "Tag"
-	var title := _label(content, levels[index].title, 24)
+	var title := _label(content, levels[index].title, 25)
+	title.add_theme_color_override("font_shadow_color", Color("fff9e5"))
+	title.add_theme_constant_override("shadow_offset_y", -1)
 	title.name = "Title"
 	var pause := _button(content, "Ⅱ", pause_game, CREAM, 24)
 	pause.name = "Pause"
@@ -277,7 +272,7 @@ func start_level(index: int) -> void:
 	board.clip_contents = true
 	content.add_child(board)
 	board.set_data(levels[index], state)
-	hint_label = _label(content, levels[index].hint, 16, Color("826570"), true)
+	hint_label = _label(content, levels[index].hint, 16, INK, true)
 	hint_label.name = "Hint"
 	hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stick = Stick.new()
@@ -288,7 +283,7 @@ func start_level(index: int) -> void:
 	undo_button.name = "Undo"
 	var restart := _button(content, "重开", restart_level, Color("e6eddc"), 16)
 	restart.name = "Restart"
-	var tip := _label(content, "拨动走一格 · 按住连续走", 12, Color("947d87"), true)
+	var tip := _label(content, "短按一步 · 长按连走", 12, Color("7e5565"), true)
 	tip.name = "ControlTip"
 	_update_hud()
 	_layout()
@@ -307,41 +302,44 @@ func _layout() -> void:
 		if screen.y > 0:
 			top = maxf(20.0, safe.position.y * h / screen.y + 12)
 			bottom = maxf(16.0, (screen.y - safe.end.y) * h / screen.y + 8)
+	layout_top = top
+	layout_bottom = bottom
 	if mode == "home":
 		_rect(content.get_node("Caption"), 20, top+20, w-40, 27)
 		_rect(content.get_node("Title"), 20, top+56, w-40, 86)
 		_rect(content.get_node("Subtitle"), 20, top+136, w-40, 39)
 		_rect(content.get_node("Hero"), 18, top+184, w-36, maxf(168, h-top-bottom-434))
 		_rect(content.get_node("Tagline"), 20, h-bottom-248, w-40, 42)
-		_rect(content.get_node("Start"), 54, h-bottom-191, w-108, 62)
-		_rect(content.get_node("Select"), 54, h-bottom-113, (w-124)*0.65, 52)
-		_rect(content.get_node("Settings"), 70+(w-124)*0.65, h-bottom-113, (w-124)*0.35, 52)
-		_rect(content.get_node("Footer"), 20, h-bottom-40, w-40, 25)
+		_rect(content.get_node("Start"), 57, h-bottom-194, w-114, 68)
+		_rect(content.get_node("Select"), 57, h-bottom-110, (w-130)*0.65, 55)
+		_rect(content.get_node("Settings"), 73+(w-130)*0.65, h-bottom-110, (w-130)*0.35, 55)
+		_rect(content.get_node("Footer"), 20, h-bottom-25, w-40, 25)
 	elif mode == "select":
 		_rect(content.get_node("Back"), 22, top, 52, 48)
-		_rect(content.get_node("Title"), 84, top+12, w-168, 48)
-		_rect(content.get_node("Subtitle"), 30, top+71, w-60, 32)
+		_rect(content.get_node("Title"), 84, top+4, w-168, 42)
+		_rect(content.get_node("Subtitle"), 30, top+53, w-60, 28)
 		var bw := (w-88)/3.0
 		var bh := minf(93, (h-top-bottom-228)/4.0)
 		for i in levels.size():
 			_rect(content.get_node("Level%d" % i), 28 + (i%3)*(bw+16), top+132+(i/3)*(bh+18), bw, bh)
 		_rect(content.get_node("Footer"), 12, h-bottom-54, w-24, 40)
 	elif mode == "play" and is_instance_valid(board):
-		_rect(content.get_node("Tag"), 26, top, w-104, 18)
-		_rect(content.get_node("Title"), 26, top+19, w-111, 34)
-		_rect(content.get_node("Pause"), w-74, top+4, 48, 46)
-		_rect(counter, 27, top+60, w*0.64, 25)
-		_rect(step_label, w*0.71, top+60, w*0.20, 25)
-		_rect(board, 12, top+101, w-24, maxf(170, h-top-bottom-305))
-		_rect(hint_label, 26, h-bottom-193, w-52, 39)
-		var control_w := minf(160.0, (w-70.0)*0.5)
-		var action_w := minf(192.0, (w-70.0)*0.5)
-		var stick_x := 22.0 if not progress.left_handed else w-22-control_w
-		var actions_x := w-26-action_w if not progress.left_handed else 26.0
-		_rect(stick, stick_x, h-bottom-149, control_w, 134)
-		_rect(undo_button, actions_x, h-bottom-134, action_w, 52)
-		_rect(content.get_node("Restart"), actions_x, h-bottom-69, action_w, 43)
-		_rect(content.get_node("ControlTip"), stick_x-6, h-bottom-16, control_w+12, 23)
+		_rect(content.get_node("Tag"), 33, top-2, w-118, 18)
+		_rect(content.get_node("Title"), 33, top+18, w-124, 32)
+		_rect(content.get_node("Pause"), w-79, top+4, 49, 49)
+		_rect(counter, 35, top+56, w*0.64-12, 25)
+		_rect(step_label, w*0.73, top+56, w*0.19, 25)
+		step_label.add_theme_color_override("font_color", INK)
+		_rect(board, 12, top+117, w-24, maxf(160, h-top-bottom-361))
+		_rect(hint_label, 31, h-bottom-240, w-62, 32)
+		var control_w := minf(180.0, (w-66.0)*0.5)
+		var action_w := minf(202.0, (w-80.0)*0.5)
+		var stick_x := 25.0 if not progress.left_handed else w-25-control_w
+		var actions_x := w-28-action_w if not progress.left_handed else 28.0
+		_rect(stick, stick_x, h-bottom-188, control_w, 180)
+		_rect(undo_button, actions_x, h-bottom-160, action_w, 63)
+		_rect(content.get_node("Restart"), actions_x, h-bottom-80, action_w, 54)
+		_rect(content.get_node("ControlTip"), actions_x, h-bottom-185, action_w, 22)
 	if overlay.get_child_count() > 0:
 		var panel: Control = overlay.get_node_or_null("Panel")
 		if panel:
@@ -580,7 +578,7 @@ func _panel(title: String, subtitle: String, height: float = 322) -> Panel:
 	var panel := Panel.new()
 	panel.name = "Panel"
 	panel.size = Vector2(minf(size.x-48, 398), height)
-	panel.add_theme_stylebox_override("panel", _style(CREAM, INK, 25, true))
+	panel.add_theme_stylebox_override("panel", UiSkin.panel("cream"))
 	overlay.add_child(panel)
 	var heading := _label(panel, title, 29, INK, true)
 	_rect(heading, 12, 22, panel.size.x-24, 49)
@@ -633,7 +631,7 @@ func pause_game() -> void:
 
 func _settings() -> void:
 	var panel := _panel("小小设置", "放松一点，按自己的习惯来。", 371)
-	var hand := _button(panel, "轮盘位置：%s" % ("右手" if progress.left_handed else "左手"), _toggle_hand, CREAM, 17)
+	var hand := _button(panel, "方向键位置：%s" % ("右手" if progress.left_handed else "左手"), _toggle_hand, CREAM, 17)
 	_rect(hand, 25, 145, panel.size.x-50, 51)
 	var sound := _button(panel, "音效：%s" % ("开" if progress.sound else "关"), _toggle_sound, CREAM, 17)
 	_rect(sound, 25, 211, panel.size.x-50, 51)
@@ -687,11 +685,11 @@ func _draw() -> void:
 	var factor := maxf(size.x / MEADOW.get_width(), size.y / MEADOW.get_height())
 	var bg_size := MEADOW.get_size() * factor
 	draw_texture_rect(MEADOW, Rect2((size-bg_size)*0.5, bg_size), false)
+	if mode == "home":
+		draw_style_box(UiSkin.panel("cream"), Rect2(37, size.y-layout_bottom-218, size.x-74, 187))
 	if mode == "play" or mode == "select":
-		var header := _style(Color(1.0,0.957,0.843,0.94), Color("cfa47b"), 19, true)
-		draw_style_box(header, Rect2(15, 14, size.x-30, 103 if mode == "play" else 119))
+		draw_style_box(UiSkin.panel("cream"), Rect2(15, layout_top-10, size.x-30, 119 if mode == "play" else 123))
 	if mode == "play":
-		var tray := _style(Color(1.0,0.951,0.834,0.94), Color("d4b390"), 29, true)
-		draw_style_box(tray, Rect2(9, size.y-180, size.x-18, 190))
-		var hint := _style(Color(1.0,0.97,0.86,0.88), Color.TRANSPARENT, 13)
-		draw_style_box(hint, Rect2(21, size.y-216, size.x-42, 42))
+		draw_style_box(UiSkin.panel("badge"), Rect2(26, layout_top+55, size.x*0.64, 30))
+		draw_style_box(UiSkin.panel("cream"), Rect2(12, size.y-layout_bottom-200, size.x-24, 214))
+		draw_style_box(UiSkin.panel("badge"), Rect2(22, size.y-layout_bottom-242, size.x-44, 44))

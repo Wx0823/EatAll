@@ -69,16 +69,16 @@ func run() -> void:
 	var center: Vector2 = game.stick.get_global_rect().get_center()
 	var start: Dictionary = game.state.duplicate(true)
 	touch(center, true)
-	check(game.state.moves == 0, "touch within dead zone does not move")
+	check(game.state.moves == 0, "blank D-pad center does not move")
 	touch(center, false)
-	touch(center + Vector2(40, 40), true)
-	check(game.state.moves == 0, "initial diagonal boundary does not choose direction")
+	touch(game.stick.global_position + Vector2(3,3), true)
+	check(game.state.moves == 0, "blank D-pad corner does not choose a diagonal")
 	touch(center, false)
-	touch(center + Vector2(45,0), true)
+	touch(game.stick.button_center(Vector2i.RIGHT), true)
 	check(game.state.moves == 1 and game.state.body.size() == 4, "native touch enters input chain and grows exactly once")
-	check(game.stick.touch_id == 0 and not game.stick.mouse_held, "emulated mouse cannot recapture raw touch stick")
-	touch(center + Vector2(0,-45), true, 1)
-	check(game.stick.touch_id == 0 and game.held == Vector2i.RIGHT, "second finger cannot steal stick")
+	check(game.stick.touch_id == 0 and not game.stick.mouse_held, "emulated mouse cannot recapture raw touch D-pad")
+	touch(game.stick.button_center(Vector2i.UP), true, 1)
+	check(game.stick.touch_id == 0 and game.held == Vector2i.RIGHT, "second finger cannot steal D-pad")
 	touch(center, false, 1)
 	touch(center, false)
 	await create_timer(0.55).timeout
@@ -86,7 +86,7 @@ func run() -> void:
 	tap(game.content.get_node("Undo"))
 	await process_frame
 	check(same(game.state, start) and game.history.is_empty(), "actual undo button restores body fruit and history")
-	touch(center + Vector2(-45,0), true)
+	touch(game.stick.button_center(Vector2i.LEFT), true)
 	touch(center, false)
 	check(same(game.state, start) and game.history.is_empty(), "invalid reverse adds no undo entry")
 	game.try_move(Vector2i.RIGHT)
@@ -105,7 +105,7 @@ func run() -> void:
 
 	# Actual held touch progresses at the runtime repeat cadence and stops at terminal.
 	center = game.stick.get_global_rect().get_center()
-	touch(center + Vector2(45,0), true)
+	touch(game.stick.button_center(Vector2i.RIGHT), true)
 	await create_timer(1.25).timeout
 	check(game.state.status == "won" and game.state.moves == 3 and game.held == Vector2i.ZERO, "held touch repeats then stops on win")
 	touch(center, false)
@@ -137,7 +137,7 @@ func run() -> void:
 	game.start_level(0)
 	game.skip_animations = false
 	center = game.stick.get_global_rect().get_center()
-	touch(center + Vector2(45,0), true)
+	touch(game.stick.button_center(Vector2i.RIGHT), true)
 	game.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
 	check(game.paused and game.held == Vector2i.ZERO and game.stick.touch_id == -1, "focus loss clears touch and pauses")
 	game._close_overlay()

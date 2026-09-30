@@ -57,7 +57,7 @@ func advance(duration:float)->void:
 		app.board._process(dt)
 		remaining-=dt
 func tap_direction(direction:Vector2i)->void:
-	var position:Vector2=app.stick.global_position+app.stick.size*.5+Vector2(direction)*38
+	var position:Vector2=app.stick.button_center(direction)
 	touch(position,true)
 	touch(position,false)
 func click_control(control:Control)->void:

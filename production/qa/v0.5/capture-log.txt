@@ -1,0 +1,14 @@
+Godot Engine v4.5.1.stable.official.f62fdbde1 - https://godotengine.org
+OpenGL API 3.3.0 NVIDIA 616.56 - Compatibility - Using Device: NVIDIA - NVIDIA GeForce RTX 5060 Ti
+
+CAPTURE 01-home.png
+CAPTURE 02-home-pressed.png
+CAPTURE 03-level12.png
+CAPTURE 04-up-key-pressed.png
+CAPTURE 05-pause.png
+CAPTURE 06-settings.png
+CAPTURE 07-level-select.png
+CAPTURE 08-short-screen.png
+CAPTURE 09-short-right-hand.png
+CAPTURE 10-short-settings.png
+UI_V5_CAPTURE failures=0

@@ -71,7 +71,7 @@ func capture() -> void:
 func frames(count: int) -> void:
 	for i in range(count): await process_frame
 func press(direction: Vector2i) -> void:
-	touch_position = app.stick.global_position + app.stick.size * 0.5 + Vector2(direction) * 38
+	touch_position = app.stick.button_center(direction)
 	send_touch(true)
 func send_touch(pressed: bool) -> void:
 	var event := InputEventScreenTouch.new()
